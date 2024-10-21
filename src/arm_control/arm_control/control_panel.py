@@ -30,8 +30,12 @@ class ControlPanel():
         stdscr.clear()
         stdscr.addstr(0, 0, f"Mode: {self.mode}")
         stdscr.addstr(2, 0, "Current Array: " + ("Left Joint" if self.is_left_array else "Right Joint"))
-        stdscr.addstr(4, 0, f"cur_joint_left: {self.cur_joint_left}")
-        stdscr.addstr(5, 0, f"cur_joint_right: {self.cur_joint_right}")
+        if self.is_left_array:
+            stdscr.addstr(4, 0, f"cur_joint_left: {self.cur_joint_left}", curses.A_REVERSE)
+            stdscr.addstr(5, 0, f"cur_joint_right: {self.cur_joint_right}")
+        else:
+            stdscr.addstr(4, 0, f"cur_joint_left: {self.cur_joint_left}")
+            stdscr.addstr(5, 0, f"cur_joint_right: {self.cur_joint_right}", curses.A_REVERSE)
         stdscr.addstr(7, 0, f"Control Index: {self.index}")
         
         # Highlight the active element in the current array
@@ -52,11 +56,11 @@ class ControlPanel():
             if self.mode == utils.PanelState.NORMAL:
                 if key == ord('q'):
                     break  # Exit the control loop and script
-                elif key == curses.KEY_RIGHT:
+                elif key == curses.KEY_DOWN:
                     self.index = (self.index + 1) % len(self.array)
-                elif key == curses.KEY_LEFT:
+                elif key == curses.KEY_UP:
                     self.index = (self.index - 1) % len(self.array)
-                elif key == curses.KEY_UP or key == curses.KEY_DOWN:
+                elif key == curses.KEY_LEFT or key == curses.KEY_RIGHT:
                     self.switch_array()  # Switch between left and right arrays
                 elif key == ord('i'):
                     self.mode = utils.PanelState.CONTROL
