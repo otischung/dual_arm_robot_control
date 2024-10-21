@@ -13,7 +13,13 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 
-# Declare the enum for LEFT and RIGHT
+# Declare the enum for LEFT and RIGHT arm
 class ArmSide(Enum):
     LEFT = 1
     RIGHT = 2
+
+
+# Declare the enum for state of control panel
+class PanelState(Enum):
+    NORMAL = 1
+    CONTROL = 2
