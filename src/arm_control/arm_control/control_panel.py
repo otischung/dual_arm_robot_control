@@ -18,32 +18,45 @@ class ControlPanel():
         self.index = 0  # Start with the first element in cur_joint_left
         self.is_left_array = True  # Track if controlling left array
         self.mode = utils.PanelState.NORMAL  # Start in normal mode
+        self.select = utils.PanelSelect.LEFT
 
-    def switch_array(self):
-        if self.is_left_array:
-            self.array = self.cur_joint_right
-        else:
-            self.array = self.cur_joint_left
-        self.is_left_array = not self.is_left_array
+    def reset_angle(self):
+        self.cur_joint_left = copy.deepcopy(self._init_joint_left)
+        self.cur_joint_right = copy.deepcopy(self._init_joint_right)
     
     def display(self, stdscr):
         stdscr.clear()
-        stdscr.addstr(0, 0, f"Mode: {self.mode}")
-        stdscr.addstr(2, 0, "Current Array: " + ("Left Joint" if self.is_left_array else "Right Joint"))
-        if self.is_left_array:
-            stdscr.addstr(4, 0, f"cur_joint_left: {self.cur_joint_left}", curses.A_REVERSE)
-            stdscr.addstr(5, 0, f"cur_joint_right: {self.cur_joint_right}")
+        # Mode
+        if self.mode == utils.PanelState.NORMAL:
+            stdscr.addstr(0, 0, f"Mode: Normal")
+        elif self.mode == utils.PanelState.SELECT:
+            stdscr.addstr(0, 0, f"Mode: Select")
+        elif self.mode == utils.PanelState.CONTROL:
+            stdscr.addstr(0, 0, f"Mode: Control")
+
+        if self.select == utils.PanelSelect.LEFT:
+            stdscr.addstr(2, 0, f"cur_joint_left: {self.cur_joint_left}", curses.A_REVERSE)
+            stdscr.addstr(3, 0, f"cur_joint_right: {self.cur_joint_right}")
+            stdscr.addstr(5, 0, "Reset all angles")
+        elif self.select == utils.PanelSelect.RIGHT:
+            stdscr.addstr(2, 0, f"cur_joint_left: {self.cur_joint_left}")
+            stdscr.addstr(3, 0, f"cur_joint_right: {self.cur_joint_right}", curses.A_REVERSE)
+            stdscr.addstr(5, 0, "Reset all angles")
         else:
-            stdscr.addstr(4, 0, f"cur_joint_left: {self.cur_joint_left}")
-            stdscr.addstr(5, 0, f"cur_joint_right: {self.cur_joint_right}", curses.A_REVERSE)
-        stdscr.addstr(7, 0, f"Control Index: {self.index}")
+            stdscr.addstr(2, 0, f"cur_joint_left: {self.cur_joint_left}")
+            stdscr.addstr(3, 0, f"cur_joint_right: {self.cur_joint_right}")
+            stdscr.addstr(5, 0, "Reset all angles", curses.A_REVERSE)
         
-        # Highlight the active element in the current array
-        for i, val in enumerate(self.array):
-            if i == self.index:
-                stdscr.addstr(9 + i, 0, f"Element {i}: {val} <-", curses.A_REVERSE)
-            else:
-                stdscr.addstr(9 + i, 0, f"Element {i}: {val}")
+        if self.mode != utils.PanelState.NORMAL:
+            # Highlight the active element in the current array
+            for i, val in enumerate(self.array):
+                if i == self.index:
+                    if self.mode == utils.PanelState.SELECT:
+                        stdscr.addstr(7 + i, 0, f"Joint {i + 1}: {val} <-", curses.A_REVERSE)
+                    elif self.mode == utils.PanelState.CONTROL:
+                        stdscr.addstr(7 + i, 0, f"-->> Joint {i + 1}: {val} <<--", curses.A_REVERSE)
+                else:
+                    stdscr.addstr(7 + i, 0, f"Joint {i + 1}: {val}")
         stdscr.refresh()
 
     def control_loop(self, stdscr):
@@ -54,24 +67,40 @@ class ControlPanel():
             key = stdscr.getch()
 
             if self.mode == utils.PanelState.NORMAL:
-                if key == ord('q'):
+                if key == ord('q') or key == 27:  # ESC key
                     break  # Exit the control loop and script
+                elif key == curses.KEY_UP:
+                    self.select = (self.select - 1) % len(utils.PanelSelect)
                 elif key == curses.KEY_DOWN:
+                    self.select = (self.select + 1) % len(utils.PanelSelect)
+                elif key == curses.KEY_ENTER or key in [10, 13]:
+                    if self.select == utils.PanelSelect.LEFT:
+                        self.array = self.cur_joint_left
+                        self.mode = utils.PanelState.SELECT
+                    elif self.select == utils.PanelSelect.RIGHT:
+                        self.array = self.cur_joint_right
+                        self.mode = utils.PanelState.SELECT
+                    elif self.select == utils.PanelSelect.RESET:
+                        self.reset_angle()
+                        self.select = utils.PanelSelect.LEFT
+
+            elif self.mode == utils.PanelState.SELECT:
+                if key == curses.KEY_DOWN:
                     self.index = (self.index + 1) % len(self.array)
                 elif key == curses.KEY_UP:
                     self.index = (self.index - 1) % len(self.array)
-                elif key == curses.KEY_LEFT or key == curses.KEY_RIGHT:
-                    self.switch_array()  # Switch between left and right arrays
-                elif key == ord('i'):
+                elif key == curses.KEY_ENTER or key in [10, 13]:
                     self.mode = utils.PanelState.CONTROL
+                elif key == ord('q') or key == 27:  # ESC key
+                    self.mode = utils.PanelState.NORMAL
 
             elif self.mode == utils.PanelState.CONTROL:
                 if key == curses.KEY_UP:
                     self.array[self.index] += 1  # Increase current array value
                 elif key == curses.KEY_DOWN:
                     self.array[self.index] -= 1  # Decrease current array value
-                elif key == 27:  # ESC key
-                    self.mode = utils.PanelState.NORMAL
+                elif key == ord('q') or key == 27:  # ESC key
+                    self.mode = utils.PanelState.SELECT
 
 
 def main(stdscr):
@@ -80,4 +109,6 @@ def main(stdscr):
 
 
 if __name__ == "__main__":
+    # https://stackoverflow.com/questions/27372068/why-does-the-escape-key-have-a-delay-in-python-curses?fbclid=IwZXh0bgNhZW0CMTEAAR1DwC-iF0EG7TBcISSEZL561OCsPDfn7mN524uqCH7TrN5Hp6qYVpLkTx0_aem_fN0t19jEhI1D6ZcEuJXYKA
+    curses.set_escdelay(25)
     curses.wrapper(main)

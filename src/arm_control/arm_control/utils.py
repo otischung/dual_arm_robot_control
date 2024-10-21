@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, IntEnum
 
 
 class bcolors:
@@ -20,6 +20,14 @@ class ArmSide(Enum):
 
 
 # Declare the enum for state of control panel
-class PanelState(Enum):
-    NORMAL = 1
+class PanelState(IntEnum):
+    NORMAL = 0
+    SELECT = 1
     CONTROL = 2
+
+
+# Declare the enum for option of control panel
+class PanelSelect(IntEnum):
+    LEFT = 0
+    RIGHT = 1
+    RESET = 2
