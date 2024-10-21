@@ -108,7 +108,7 @@ class ArmSerialWriter(Node):
         """
         radian_positions = msg.positions
         degree_positions = [math.degrees(rad) % 360 for rad in radian_positions]
-        ctrl_json = {"servo_target_angles": degree_positions}
+        ctrl_json = {params.SERIAL_JSON_KEY: degree_positions}
 
         # Handle the left arm's joint angles.
         if arm_side == params.ArmSide.LEFT:
