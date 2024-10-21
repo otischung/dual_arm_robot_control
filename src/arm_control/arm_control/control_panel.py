@@ -14,11 +14,10 @@ class ControlPanel():
         self.cur_joint_right = copy.deepcopy(self._init_joint_right)
 
         # Control state
-        self.array = self.cur_joint_left  # Start with the left joint array
-        self.index = 0  # Start with the first element in cur_joint_left
-        self.is_left_array = True  # Track if controlling left array
-        self.mode = utils.PanelState.NORMAL  # Start in normal mode
-        self.select = utils.PanelSelect.LEFT
+        self._cur_select_arm = self.cur_joint_left  # Start with the left joint array
+        self._cur_select_joint = 0  # Start with the first element in cur_joint_left
+        self._panel_state = utils.PanelState.NORMAL  # Start in normal mode
+        self._panel_select = utils.PanelSelect.LEFT
 
     def reset_angle(self):
         self.cur_joint_left = copy.deepcopy(self._init_joint_left)
@@ -27,18 +26,18 @@ class ControlPanel():
     def display(self, stdscr):
         stdscr.clear()
         # Mode
-        if self.mode == utils.PanelState.NORMAL:
+        if self._panel_state == utils.PanelState.NORMAL:
             stdscr.addstr(0, 0, f"Mode: Normal")
-        elif self.mode == utils.PanelState.SELECT:
+        elif self._panel_state == utils.PanelState.SELECT:
             stdscr.addstr(0, 0, f"Mode: Select")
-        elif self.mode == utils.PanelState.CONTROL:
+        elif self._panel_state == utils.PanelState.CONTROL:
             stdscr.addstr(0, 0, f"Mode: Control")
 
-        if self.select == utils.PanelSelect.LEFT:
+        if self._panel_select == utils.PanelSelect.LEFT:
             stdscr.addstr(2, 0, f"cur_joint_left: {self.cur_joint_left}", curses.A_REVERSE)
             stdscr.addstr(3, 0, f"cur_joint_right: {self.cur_joint_right}")
             stdscr.addstr(5, 0, "Reset all angles")
-        elif self.select == utils.PanelSelect.RIGHT:
+        elif self._panel_select == utils.PanelSelect.RIGHT:
             stdscr.addstr(2, 0, f"cur_joint_left: {self.cur_joint_left}")
             stdscr.addstr(3, 0, f"cur_joint_right: {self.cur_joint_right}", curses.A_REVERSE)
             stdscr.addstr(5, 0, "Reset all angles")
@@ -47,13 +46,13 @@ class ControlPanel():
             stdscr.addstr(3, 0, f"cur_joint_right: {self.cur_joint_right}")
             stdscr.addstr(5, 0, "Reset all angles", curses.A_REVERSE)
         
-        if self.mode != utils.PanelState.NORMAL:
+        if self._panel_state != utils.PanelState.NORMAL:
             # Highlight the active element in the current array
-            for i, val in enumerate(self.array):
-                if i == self.index:
-                    if self.mode == utils.PanelState.SELECT:
+            for i, val in enumerate(self._cur_select_arm):
+                if i == self._cur_select_joint:
+                    if self._panel_state == utils.PanelState.SELECT:
                         stdscr.addstr(7 + i, 0, f"Joint {i + 1}: {val} <-", curses.A_REVERSE)
-                    elif self.mode == utils.PanelState.CONTROL:
+                    elif self._panel_state == utils.PanelState.CONTROL:
                         stdscr.addstr(7 + i, 0, f"-->> Joint {i + 1}: {val} <<--", curses.A_REVERSE)
                 else:
                     stdscr.addstr(7 + i, 0, f"Joint {i + 1}: {val}")
@@ -66,41 +65,41 @@ class ControlPanel():
             self.display(stdscr)
             key = stdscr.getch()
 
-            if self.mode == utils.PanelState.NORMAL:
+            if self._panel_state == utils.PanelState.NORMAL:
                 if key == ord('q') or key == 27:  # ESC key
                     break  # Exit the control loop and script
                 elif key == curses.KEY_UP:
-                    self.select = (self.select - 1) % len(utils.PanelSelect)
+                    self._panel_select = (self._panel_select - 1) % len(utils.PanelSelect)
                 elif key == curses.KEY_DOWN:
-                    self.select = (self.select + 1) % len(utils.PanelSelect)
+                    self._panel_select = (self._panel_select + 1) % len(utils.PanelSelect)
                 elif key == curses.KEY_ENTER or key in [10, 13]:
-                    if self.select == utils.PanelSelect.LEFT:
-                        self.array = self.cur_joint_left
-                        self.mode = utils.PanelState.SELECT
-                    elif self.select == utils.PanelSelect.RIGHT:
-                        self.array = self.cur_joint_right
-                        self.mode = utils.PanelState.SELECT
-                    elif self.select == utils.PanelSelect.RESET:
+                    if self._panel_select == utils.PanelSelect.LEFT:
+                        self._cur_select_arm = self.cur_joint_left
+                        self._panel_state = utils.PanelState.SELECT
+                    elif self._panel_select == utils.PanelSelect.RIGHT:
+                        self._cur_select_arm = self.cur_joint_right
+                        self._panel_state = utils.PanelState.SELECT
+                    elif self._panel_select == utils.PanelSelect.RESET:
                         self.reset_angle()
-                        self.select = utils.PanelSelect.LEFT
+                        self._panel_select = utils.PanelSelect.LEFT
 
-            elif self.mode == utils.PanelState.SELECT:
+            elif self._panel_state == utils.PanelState.SELECT:
                 if key == curses.KEY_DOWN:
-                    self.index = (self.index + 1) % len(self.array)
+                    self._cur_select_joint = (self._cur_select_joint + 1) % len(self._cur_select_arm)
                 elif key == curses.KEY_UP:
-                    self.index = (self.index - 1) % len(self.array)
+                    self._cur_select_joint = (self._cur_select_joint - 1) % len(self._cur_select_arm)
                 elif key == curses.KEY_ENTER or key in [10, 13]:
-                    self.mode = utils.PanelState.CONTROL
+                    self._panel_state = utils.PanelState.CONTROL
                 elif key == ord('q') or key == 27:  # ESC key
-                    self.mode = utils.PanelState.NORMAL
+                    self._panel_state = utils.PanelState.NORMAL
 
-            elif self.mode == utils.PanelState.CONTROL:
+            elif self._panel_state == utils.PanelState.CONTROL:
                 if key == curses.KEY_UP:
-                    self.array[self.index] += 1  # Increase current array value
+                    self._cur_select_arm[self._cur_select_joint] += 1  # Increase current array value
                 elif key == curses.KEY_DOWN:
-                    self.array[self.index] -= 1  # Decrease current array value
+                    self._cur_select_arm[self._cur_select_joint] -= 1  # Decrease current array value
                 elif key == ord('q') or key == 27:  # ESC key
-                    self.mode = utils.PanelState.SELECT
+                    self._panel_state = utils.PanelState.SELECT
 
 
 def main(stdscr):
