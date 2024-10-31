@@ -20,8 +20,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'arm_reader = robot_control.arm_reader:main',
-            'arm_writer = robot_control.arm_writer:main'
+            'arm_reader = arm_control.arm_reader:main',
+            'arm_writer = arm_control.arm_writer:main',
+            'control_panel = arm_control.control_panel:main'
         ],
     },
 )

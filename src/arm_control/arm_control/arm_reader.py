@@ -1,14 +1,14 @@
 import copy
 import math
 import orjson
-import params
 import rclpy
-from utils import bcolors
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from sensor_msgs.msg import JointState
 from serial import Serial
+from arm_control.params import *
+from arm_control.utils import *
 
 
 class ArmSerialReader(Node):
@@ -70,9 +70,9 @@ class ArmSerialReader(Node):
             description="This defines the device of the right ESP32.",
         )
         self.declare_parameter(
-            "left", params.DEFAULT_LEFT_USB_SERIAL, left_descriptor)
+            "left", DEFAULT_LEFT_USB_SERIAL, left_descriptor)
         self.declare_parameter(
-            "right", params.DEFAULT_RIGHT_USB_SERIAL, right_descriptor)
+            "right", DEFAULT_RIGHT_USB_SERIAL, right_descriptor)
 
         # Retrieve serial port values for the ESP32 devices.
         serial_port_left = self.get_parameter("left").value
@@ -86,19 +86,19 @@ class ArmSerialReader(Node):
 
         # Set up the serial connections to the left and right ESP32 devices.
         self._serial_left = Serial(
-            serial_port_left, params.BAUD_RATE, timeout=0)
+            serial_port_left, BAUD_RATE, timeout=0)
         self._serial_right = Serial(
-            serial_port_right, params.BAUD_RATE, timeout=0)
+            serial_port_right, BAUD_RATE, timeout=0)
 
         # Create publishers for joint states from the left and right ESP32 devices.
         self._left_publisher = self.create_publisher(
-            JointState, params.LEFT_JOINTS_STATE_TOPIC, params.ROS_QOS_DEPTH)
+            JointState, LEFT_JOINTS_STATE_TOPIC, ROS_QOS_DEPTH)
         self._right_publisher = self.create_publisher(
-            JointState, params.RIGHT_JOINTS_STATE_TOPIC, params.ROS_QOS_DEPTH)
+            JointState, RIGHT_JOINTS_STATE_TOPIC, ROS_QOS_DEPTH)
 
         # Set timer period and callback.
-        self.timer_period = params.READER_TIMER_PERIOD  # seconds
-        self._timer = self.create_timer(params.READER_CALLBACK_TIMER_PERIOD, self.reader_callback)
+        self.timer_period = READER_TIMER_PERIOD  # seconds
+        self._timer = self.create_timer(READER_CALLBACK_TIMER_PERIOD, self.reader_callback)
 
         # Set log interval and initialize logging time.
         self.log_interval = Duration(seconds=self.timer_period)
@@ -124,7 +124,7 @@ class ArmSerialReader(Node):
         # Process and log the data from the left ESP32 device.
         try:
             degree_data_left = orjson.loads(data_left)
-            degree_positions_left = degree_data_left[params.SERIAL_JSON_KEY]
+            degree_positions_left = degree_data_left[SERIAL_JSON_KEY]
         except orjson.JSONDecodeError as error:
             self.get_logger().error(
                 f"{bcolors.FAIL}LEFT: Json decode error when recv {data_left}: {error}{bcolors.ENDC}")
@@ -141,7 +141,7 @@ class ArmSerialReader(Node):
         # Process and log the data from the right ESP32 device.
         try:
             degree_data_right = orjson.loads(data_right)
-            degree_positions_right = degree_data_right[params.SERIAL_JSON_KEY]
+            degree_positions_right = degree_data_right[SERIAL_JSON_KEY]
         except orjson.JSONDecodeError as error:
             self.get_logger().error(
                 f"{bcolors.FAIL}RIGHT: Json decode error when recv {data_right}: {error}{bcolors.ENDC}")
