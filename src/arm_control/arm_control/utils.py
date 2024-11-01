@@ -30,4 +30,5 @@ class PanelState(IntEnum):
 class PanelSelect(IntEnum):
     LEFT = 0
     RIGHT = 1
-    RESET = 2
+    STEP = 2
+    RESET = 3
