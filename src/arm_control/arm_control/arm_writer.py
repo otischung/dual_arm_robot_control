@@ -4,7 +4,7 @@ import orjson
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
-from serial import Serial
+from serial import Serial, SerialException
 from trajectory_msgs.msg import JointTrajectoryPoint
 from arm_control.params import *
 from arm_control.utils import *
@@ -42,6 +42,7 @@ class ArmSerialWriter(Node):
         >>> serial_writer = ArmSerialWriter()
         >>> rclpy.spin(serial_writer)
     """
+
     def __init__(self):
         """Initializes the ArmSerialWriter node and sets up parameters and subscriptions.
 
@@ -50,6 +51,10 @@ class ArmSerialWriter(Node):
         for both the left and right robotic arms.
         """
         super().__init__('arm_serial_writer')
+
+        # The status of serial connection
+        self.__is_left_serial_connect = True
+        self.__is_right_serial_connect = True
 
         # Declare parameters for left and right ESP32 device serial ports.
         left_descriptor = ParameterDescriptor(
@@ -76,8 +81,19 @@ class ArmSerialWriter(Node):
         self.get_logger().info("--------------------------------------")
 
         # Set up the serial connections to the left and right ESP32 devices.
-        self._serial_left = Serial(serial_port_left, BAUD_RATE, timeout=0)
-        self._serial_right = Serial(serial_port_right, BAUD_RATE, timeout=0)
+        try:
+            self._serial_left = Serial(serial_port_left, BAUD_RATE, timeout=0)
+        except SerialException as e1:
+            self.__is_left_serial_connect = False
+            self.get_logger().warning("LEFT arm connection FAILED.")
+            self.get_logger().warning(e1)
+
+        try:
+            self._serial_right = Serial(serial_port_right, BAUD_RATE, timeout=0)
+        except SerialException as e2:
+            self.__is_right_serial_connect = False
+            self.get_logger().warning("RIGHT arm connection FAILED.")
+            self.get_logger().warning(e2)
 
         # Subscribe to the joint angle topics for both left and right arms.
         self._subscriber_left = self.create_subscription(
@@ -115,23 +131,30 @@ class ArmSerialWriter(Node):
             self.get_logger().info(f"LEFT: Receive from {LEFT_JOINTS_TOPIC}: {radian_positions}")
             try:
                 ctrl_str = orjson.dumps(ctrl_json, option=orjson.OPT_APPEND_NEWLINE)
-                self._serial_left.write(ctrl_str)
+                if self.__is_left_serial_connect:
+                    self._serial_left.write(ctrl_str)
+                else:
+                    self.get_logger().warning(f"LEFT is not connected, ignoreing {radian_positions}")
+                    return
             except orjson.JSONEncodeError as error:
                 self.get_logger().error(f"{bcolors.FAIL}LEFT: Json encode error when recv message: {msg}: {error}{bcolors.ENDC}")
                 return
             self.get_logger().info(f"LEFT: Send to {DEFAULT_LEFT_USB_SERIAL}: {ctrl_str}")
-        
+
         # Handle the right arm's joint angles.
         elif arm_side == ArmSide.RIGHT:
             self.get_logger().info(f"RIGHT: Receive from {RIGHT_JOINTS_TOPIC}: {radian_positions}")
             try:
                 ctrl_str = orjson.dumps(ctrl_json, option=orjson.OPT_APPEND_NEWLINE)
-                self._serial_right.write(ctrl_str)
+                if self.__is_right_serial_connect:
+                    self._serial_right.write(ctrl_str)
+                else:
+                    self.get_logger().warning(f"RIGHT is not connected, ignoreing {radian_positions}")
+                    return
             except orjson.JSONEncodeError as error:
                 self.get_logger().error(f"{bcolors.FAIL}RIGHT: Json encode error when recv message: {msg}: {error}{bcolors.ENDC}")
                 return
             self.get_logger().info(f"RIGHT: Send to {DEFAULT_RIGHT_USB_SERIAL}: {ctrl_str}")
-            
 
 
 def main(args=None):
@@ -139,7 +162,7 @@ def main(args=None):
 
     This function initializes the ROS 2 Python client library, creates the ArmSerialWriter node, 
     and spins it to keep it alive, processing incoming joint angle messages.
-    """ 
+    """
     rclpy.init(args=args)
     serial_writer = ArmSerialWriter()
     rclpy.spin(serial_writer)
