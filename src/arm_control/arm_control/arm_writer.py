@@ -86,14 +86,14 @@ class ArmSerialWriter(Node):
         except SerialException as e1:
             self.__is_left_serial_connect = False
             self.get_logger().warning("LEFT arm connection FAILED.")
-            self.get_logger().warning(e1)
+            self.get_logger().warning(f"{e1}")
 
         try:
             self._serial_right = Serial(serial_port_right, BAUD_RATE, timeout=0)
         except SerialException as e2:
             self.__is_right_serial_connect = False
             self.get_logger().warning("RIGHT arm connection FAILED.")
-            self.get_logger().warning(e2)
+            self.get_logger().warning(f"{e2}")
 
         # Subscribe to the joint angle topics for both left and right arms.
         self._subscriber_left = self.create_subscription(
