@@ -1,3 +1,6 @@
+import curses
+
+
 ### ROS control
 ROS_QOS_DEPTH = 10
 LEFT_JOINTS_TOPIC = "/left_arm"
@@ -29,6 +32,9 @@ DEFAULT_LEFT_USB_SERIAL = "/dev/ttyACM0"
 DEFAULT_RIGHT_USB_SERIAL = "/dev/ttyUSB0"
 SERIAL_JSON_KEY = "servo_target_angles"  # Assuming this is the key in your JSON
 BAUD_RATE = 115200
+
+KEY_ESC: int = 27
+KEY_ENTER: int = curses.KEY_ENTER
 
 
 if DEFAULT_JOINT_NUMBER != len(DEFAULT_RIGHT_JOINT_DEG_ANGLE) or \
