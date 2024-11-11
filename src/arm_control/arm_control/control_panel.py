@@ -10,23 +10,47 @@ class ControlPanel():
     def __init__(self, arm_publisher_: ArmPublisher):
         # The transition table of the Finite State Machine
         self._transitions = [
-            {"src": PanelState.NORMAL, "dst": PanelState.NORMAL, "key": KEY_ENTER, "sel": PanelSelect.RESET},
-            {"src": PanelState.NORMAL, "dst": PanelState.SELECT, "key": KEY_ENTER, "sel": PanelSelect.LEFT | PanelSelect.RIGHT},
-            {"src": PanelState.NORMAL, "dst": PanelState.CONTROL_STEP, "key": KEY_ENTER, "sel": PanelSelect.STEP},
-            {"src": PanelState.NORMAL, "dst": PanelState.EXIT, "key": KEY_ESC, "sel": PanelSelect.ALL},
-            {"src": PanelState.SELECT, "dst": PanelState.NORMAL, "key": KEY_ESC, "sel": PanelSelect.LEFT | PanelSelect.RIGHT},
-            {"src": PanelState.SELECT, "dst": PanelState.CONTROL_JOINT, "key": KEY_ENTER, "sel": PanelSelect.LEFT | PanelSelect.RIGHT},
-            {"src": PanelState.CONTROL_JOINT, "dst": PanelState.SELECT, "key": KEY_ESC, "sel": PanelSelect.LEFT | PanelSelect.RIGHT},
-            {"src": PanelState.CONTROL_STEP, "dst": PanelState.NORMAL, "key": KEY_ESC, "sel": PanelSelect.STEP},
-            # Error Handling
-            {"src": PanelState.ALL, "dst": PanelState.ALL, "key": -1, "sel": PanelSelect.ALL}
+            {"src": PanelState.NORMAL, "dst": PanelState.NORMAL,
+                "key": KEY_ENTER, "sel": PanelSelect.RESET},
+            {"src": PanelState.NORMAL, "dst": PanelState.SELECT,
+                "key": KEY_ENTER, "sel": PanelSelect.LEFT | PanelSelect.RIGHT},
+            {"src": PanelState.NORMAL, "dst": PanelState.CONTROL_STEP,
+                "key": KEY_ENTER, "sel": PanelSelect.STEP},
+            {"src": PanelState.NORMAL, "dst": PanelState.EXIT,
+                "key": KEY_ESC, "sel": PanelSelect.ALL},
+            {"src": PanelState.SELECT, "dst": PanelState.NORMAL,
+                "key": KEY_ESC, "sel": PanelSelect.LEFT | PanelSelect.RIGHT},
+            {"src": PanelState.SELECT, "dst": PanelState.CONTROL_JOINT,
+                "key": KEY_ENTER, "sel": PanelSelect.LEFT | PanelSelect.RIGHT},
+            {"src": PanelState.CONTROL_JOINT, "dst": PanelState.SELECT,
+                "key": KEY_ESC, "sel": PanelSelect.LEFT | PanelSelect.RIGHT},
+            {"src": PanelState.CONTROL_STEP, "dst": PanelState.NORMAL,
+                "key": KEY_ESC, "sel": PanelSelect.STEP},
         ]
         self._cur_state: PanelState = PanelState.NORMAL
-        self._cur_sel_arm: PanelSelect = PanelSelect.LEFT
+        self._cur_sel: PanelSelect = PanelSelect.LEFT
         self._cur_sel_joint: int = 0
-    
+
     def control_loop(self, stdscr):
-        pass
+        while True:
+            stdscr.clear()
+            stdscr.addstr(1, 0, f"{self._cur_state.name}")
+            key = key_trans(stdscr.getch())
+            trans: dict = None
+
+            for trans_ in self._transitions:
+                # Check if match.
+                if trans_["key"] == key and \
+                        bool(trans_["src"] & self._cur_state) and \
+                        bool(trans_["sel"] & self._cur_sel):
+                    trans = trans_
+                    break
+
+            if trans is None:
+                stdscr.addstr(2, 0, "Error, there is NO matched transition.")
+            else:
+                self._cur_state = trans["dst"]
+            stdscr.refresh()
 
 
 def curses_main(stdscr):
