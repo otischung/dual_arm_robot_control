@@ -149,14 +149,17 @@ class ControlPanel():
                     trans = trans_
                     break
 
+            # Check if there matches any transition rules.
             if trans is None:
-                stdscr.addstr(2, 0, "Error, there is NO matched transition.")
+                raise KeyError(f"Error, there is NO matched transition for \
+                                key: {key}, panel state: {self._cur_state.name} \
+                                and panel select: {self._cur_sel.name}.")
             else:
+                # Check if the transition rule needs to execute the desired function.
                 if trans["exec"] is not None:
                     trans["exec"](key)
-                else:
-                    stdscr.addstr(
-                        3, 0, f"Error, there is no execution function.")
+
+                # Move to the target state.
                 self._cur_state = trans["dst"]
             stdscr.refresh()
 
