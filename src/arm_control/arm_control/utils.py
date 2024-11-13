@@ -16,6 +16,17 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 
+KEY_MAP = {
+    curses.KEY_UP: 0x00000001,
+    curses.KEY_DOWN: 0x00000002,
+    KEY_ESC: 0x00000004,
+    ord('q'): 0x00000004,
+    curses.KEY_ENTER: 0x00000008,
+    10: 0x00000008,
+    13: 0x00000008,
+}
+
+
 class ArmSide(IntEnum):
     """Declare the enum for LEFT and RIGHT arm
     The items must be sorted.
