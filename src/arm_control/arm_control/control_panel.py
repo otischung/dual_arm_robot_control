@@ -53,6 +53,37 @@ class ControlPanel():
         self._arm_publisher = arm_publisher_
         self._arm_publisher.pub_arm(self.cur_joint_left, self.cur_joint_right)
 
+    def _display_single(self, stdscr, message: str, y_position: int, is_highlight: bool = False):
+        style = curses.A_REVERSE if is_highlight else 0
+        stdscr.addstr(y_position, 0, message, style)
+
+    def _display_menu(self, stdscr, y_position: int = 0):
+        self._display_single(
+            stdscr, f"Panel State: {self._cur_state.name}", y_position)
+
+        self._display_single(
+            stdscr, f"LEFT arm: {self.cur_joint_left}", y_position + 2, self._cur_sel == PanelSelect.LEFT)
+        self._display_single(
+            stdscr, f"RIGHT arm: {self.cur_joint_right}", y_position + 3, self._cur_sel == PanelSelect.RIGHT)
+        self._display_single(
+            stdscr, f"Move steps (deg): {self._move_step}", y_position + 4, self._cur_sel == PanelSelect.STEP)
+        self._display_single(
+            stdscr, "Reset all angles", y_position + 5, self._cur_sel == PanelSelect.RESET)
+
+    def _display_control_joint(self, stdscr, y_position: int = 7):
+        # Highlight the active element in the current array
+        for i, val in enumerate(self._cur_sel_arm):
+            if self._cur_state == PanelState.CONTROL_JOINT and i == self._cur_sel_joint:
+                message = f"-->> Joint {i + 1}: {val} <<--"
+            else:
+                message = f"Joint {i + 1}: {val}"
+            self._display_single(
+                stdscr, message, y_position + i, i == self._cur_sel_joint)
+
+    def _display_control_step(self, stdscr, y_position: int = 7):
+        self._display_single(
+            stdscr, f"-->> Move steps (deg): {self._move_step} <<--", y_position, self._cur_state == PanelState.CONTROL_STEP)
+
     def _quit_(self, key: int = None):
         """Just a trigger function for state transition.
         """
@@ -131,12 +162,12 @@ class ControlPanel():
     def control_loop(self, stdscr):
         while True:
             stdscr.clear()
-            stdscr.addstr(1, 0, f"State:\t{self._cur_state.name}")
-            stdscr.addstr(2, 0, f"Select:\t{self._cur_sel.name}")
-            stdscr.addstr(3, 0, f"Select Joint:\t{self._cur_sel_joint}")
-            stdscr.addstr(4, 0, f"Move Step:\t{self._move_step}")
-            stdscr.addstr(5, 0, f"LEFT:\t{self.cur_joint_left}")
-            stdscr.addstr(6, 0, f"RIGHT:\t{self.cur_joint_right}")
+            self._display_menu(stdscr)
+            if bool(self._cur_state & (PanelState.SELECT | PanelState.CONTROL_JOINT)):
+                self._display_control_joint(stdscr)
+            elif self._cur_state == PanelState.CONTROL_STEP:
+                self._display_control_step(stdscr)
+
             key = stdscr.getch()
             key_bit = KEY_MAP[key]
             trans: dict = None
@@ -161,6 +192,7 @@ class ControlPanel():
 
                 # Move to the target state.
                 self._cur_state = trans["dst"]
+
             stdscr.refresh()
 
 
