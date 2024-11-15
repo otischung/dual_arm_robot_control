@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'arm_reader = arm_control.arm_reader:main',
             'arm_writer = arm_control.arm_writer:main',
+            'arm_publisher = arm_control.arm_publisher:main',
             'control_panel = arm_control.control_panel:main'
         ],
     },
