@@ -132,9 +132,9 @@ class ArmPublisher(Node):
     def _pub_trajectory_with_speed(self,
                                    dest_left_joint_deg_angle: list,
                                    dest_right_joint_deg_angle: list,
-                                   speed: float = 5.0,
-                                   duration: float = 1.0,
-                                   fps: float = 10.0,
+                                   speed: float = DEFAULT_SPEED_DEG_PER_SEC,
+                                   duration: float = DEFAULT_DURATION_SEC,
+                                   fps: float = DEFAULT_FPS,
                                    thread_id: int = 0,
                                    show_info: bool = True):
         # Calculate frames for each step in the movement
@@ -170,9 +170,9 @@ class ArmPublisher(Node):
     def pub_arm_with_speed(self,
                            dest_left_joint_deg_angle: list,
                            dest_right_joint_deg_angle: list,
-                           speed: float = 5.0,
-                           duration: float = 1.0,
-                           fps: float = 10.0,
+                           speed: float = DEFAULT_SPEED_DEG_PER_SEC,
+                           duration: float = DEFAULT_DURATION_SEC,
+                           fps: float = DEFAULT_FPS,
                            thread_id: int = 0,
                            show_info: bool = True):
         # Stop the current publishing thread if it's running
@@ -218,8 +218,9 @@ def main(args=None):
         arm_publisher.get_logger().info("-------------------------------------")
         arm_publisher.pub_arm_with_speed(MIN_LEFT_JOINT_DEG_ANGLE,
                                          MIN_RIGHT_JOINT_DEG_ANGLE,
-                                         duration=5.0,
-                                         fps=1.0,
+                                         speed=DEFAULT_SPEED_DEG_PER_SEC,
+                                         duration=DEFAULT_DURATION_SEC,
+                                         fps=DEFAULT_FPS,
                                          thread_id=0,
                                          show_info=True)
         time.sleep(2)
@@ -228,8 +229,9 @@ def main(args=None):
         arm_publisher.get_logger().info("-------------------------------------")
         arm_publisher.pub_arm_with_speed(MAX_LEFT_JOINT_DEG_ANGLE,
                                          MAX_RIGHT_JOINT_DEG_ANGLE,
-                                         duration=5.0,
-                                         fps=1.0,
+                                         speed=DEFAULT_SPEED_DEG_PER_SEC,
+                                         duration=DEFAULT_DURATION_SEC,
+                                         fps=DEFAULT_FPS,
                                          thread_id=1,
                                          show_info=True)
         time.sleep(2)
@@ -238,8 +240,9 @@ def main(args=None):
         arm_publisher.get_logger().info("-------------------------------------")
         arm_publisher.pub_arm_with_speed(DEFAULT_LEFT_JOINT_DEG_ANGLE,
                                          DEFAULT_RIGHT_JOINT_DEG_ANGLE,
-                                         duration=5.0,
-                                         fps=1.0,
+                                         speed=DEFAULT_SPEED_DEG_PER_SEC,
+                                         duration=DEFAULT_DURATION_SEC,
+                                         fps=DEFAULT_FPS,
                                          thread_id=2,
                                          show_info=True)
         time.sleep(5)
