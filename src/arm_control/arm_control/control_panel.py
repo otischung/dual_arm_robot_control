@@ -238,18 +238,38 @@ class ControlPanel():
             stdscr.refresh()
 
 
-def curses_main(stdscr):
-    arm_publisher_ = ArmPublisher()
-    panel = ControlPanel(arm_publisher_)
+def curses_main(stdscr, arm_publisher: ArmPublisher):
+    panel = ControlPanel(arm_publisher)
     panel.control_loop(stdscr)
 
 
 def main(args=None):
-    # https://stackoverflow.com/questions/27372068/why-does-the-escape-key-have-a-delay-in-python-curses?fbclid=IwZXh0bgNhZW0CMTEAAR1DwC-iF0EG7TBcISSEZL561OCsPDfn7mN524uqCH7TrN5Hp6qYVpLkTx0_aem_fN0t19jEhI1D6ZcEuJXYKA
     rclpy.init(args=args)
-    curses.set_escdelay(25)
-    curses.wrapper(curses_main)
-    rclpy.shutdown()
+
+    # Create the ROS 2 node
+    arm_publisher = ArmPublisher()
+
+    # Create a MultiThreadedExecutor
+    executor = MultiThreadedExecutor()
+    executor.add_node(arm_publisher)
+
+    # Run the executor in a separate thread
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
+    executor_thread.start()
+
+    try:
+        # Set curses ESC delay and run the curses interface
+        # Reference: https://stackoverflow.com/questions/27372068/why-does-the-escape-key-have-a-delay-in-python-curses?fbclid=IwZXh0bgNhZW0CMTEAAR1DwC-iF0EG7TBcISSEZL561OCsPDfn7mN524uqCH7TrN5Hp6qYVpLkTx0_aem_fN0t19jEhI1D6ZcEuJXYKA
+        curses.set_escdelay(25)
+        curses.wrapper(curses_main, arm_publisher)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Clean up on exit
+        arm_publisher.destroy_node()
+        executor.shutdown()
+        executor_thread.join()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":
