@@ -10,7 +10,10 @@ from arm_control.params import *
 
 
 class ArmPublisher(Node):
-    def __init__(self, node_name: str = "arm_publisher"):
+    def __init__(self,
+                 node_name: str = "arm_publisher",
+                 init_left_joint_deg_angle: list = DEFAULT_LEFT_JOINT_DEG_ANGLE,
+                 init_right_joint_deg_angle: list = DEFAULT_RIGHT_JOINT_DEG_ANGLE):
         super().__init__(node_name)
         self._joint_trajectory_publisher_left = self.create_publisher(
             JointTrajectoryPoint,
@@ -22,11 +25,18 @@ class ArmPublisher(Node):
             RIGHT_JOINTS_TOPIC,
             ROS_QOS_DEPTH
         )
+        self.prev_left_joint_deg_angle = init_left_joint_deg_angle
+        self.prev_right_joint_deg_angle = init_right_joint_deg_angle
         self._publish_thread = None
         self._publish_lock = threading.Lock()
         self._stop_event = threading.Event()
 
     def _publish_trajectory(self, joint_pos_left_deg: list, joint_pos_right_deg: list):
+        if len(joint_pos_left_deg) != len(joint_pos_right_deg):
+            self.get_logger().error("The number of joints in left is different from that in right.")
+            self.destroy_node()
+            return
+
         try:
             msg_left = JointTrajectoryPoint()
             msg_left.positions = [math.radians(
@@ -38,15 +48,11 @@ class ArmPublisher(Node):
                 pos) for pos in joint_pos_right_deg]
             msg_right.velocities = [0.0 for _ in joint_pos_right_deg]
 
-            # Simulating some time-consuming process
-            for _ in range(5):  # Example: 5 iterations of publishing
-                if self._stop_event.is_set():
-                    self.get_logger().info("Publishing thread stopped.")
-                    return
-                self._joint_trajectory_publisher_left.publish(msg_left)
-                self._joint_trajectory_publisher_right.publish(msg_right)
-                self.get_logger().info("Published joint data.")
-                time.sleep(1)  # Simulate delay between publishing
+            self.get_logger().info(f"Published LEFT joint data.\n{joint_pos_left_deg}")
+            self._joint_trajectory_publisher_left.publish(msg_left)
+            self.get_logger().info(f"Published RIGHT joint data.\n{joint_pos_right_deg}")
+            self._joint_trajectory_publisher_right.publish(msg_right)
+
         except Exception as e:
             self.get_logger().error(f"Error in publish thread: {e}")
 
@@ -59,10 +65,6 @@ class ArmPublisher(Node):
         super().destroy_node()
 
     def pub_arm(self, joint_pos_left_deg: list, joint_pos_right_deg: list):
-        if len(joint_pos_left_deg) != len(joint_pos_right_deg):
-            self.get_logger().error("The number of joints in left is different from that in right.")
-            return
-
         # Stop the current publishing thread if it's running
         with self._publish_lock:
             if self._publish_thread and self._publish_thread.is_alive():
@@ -76,6 +78,62 @@ class ArmPublisher(Node):
                 args=(joint_pos_left_deg, joint_pos_right_deg)
             )
             self._publish_thread.start()
+
+    def _cal_pub_frame_list(self,
+                            dest_left_joint_deg_angle: list,
+                            dest_right_joint_deg_angle: list,
+                            speed: float,
+                            duration: float,
+                            fps: float) -> tuple[list[list], list[list]]:
+        num_frames = int(fps * duration)  # Total frames to publish
+        time_step = 1.0 / fps  # Time per frame
+
+        # Calculate the joint position differences
+        diff_left = np.subtract(dest_left_joint_deg_angle,
+                                self.prev_left_joint_deg_angle)
+        diff_right = np.subtract(
+            dest_right_joint_deg_angle, self.prev_right_joint_deg_angle)
+
+        # Calculate maximum possible frames based on speed constraint
+        max_frames_left = max(abs(diff_left) / speed / time_step)
+        max_frames_right = max(abs(diff_right) / speed / time_step)
+        num_frames = min(num_frames, int(
+            max(max_frames_left, max_frames_right)))
+
+        # Generate intermediate joint angles for each frame
+        left_frames = [self.prev_left_joint_deg_angle +
+                       (diff_left * (i / num_frames)) for i in range(1, num_frames + 1)]
+        right_frames = [self.prev_right_joint_deg_angle +
+                        (diff_right * (i / num_frames)) for i in range(1, num_frames + 1)]
+
+        return left_frames, right_frames
+
+    def pub_arm_with_speed(self,
+                           dest_left_joint_deg_angle: list,
+                           dest_right_joint_deg_angle: list,
+                           speed: float = 5.0,
+                           duration: float = 1.0,
+                           fps: float = 10.0):
+        # Calculate frames for each step in the movement
+        left_frames, right_frames = self._cal_pub_frame_list(
+            dest_left_joint_deg_angle,
+            dest_right_joint_deg_angle,
+            speed,
+            duration,
+            fps
+        )
+
+        # Publish each frame, checking the stop_event before each publish
+        for left_frame, right_frame in zip(left_frames, right_frames):
+            # Publish the current frame
+            self.pub_arm(left_frame, right_frame)
+
+            # Delay for the time between frames
+            time.sleep(1.0 / fps)
+
+        # Update previous angles to the final destination angles
+        self.prev_left_joint_deg_angle = dest_left_joint_deg_angle
+        self.prev_right_joint_deg_angle = dest_right_joint_deg_angle
 
 
 def main(args=None):
@@ -93,22 +151,21 @@ def main(args=None):
         executor_thread = threading.Thread(target=executor.spin, daemon=True)
         executor_thread.start()
 
-        # Simulate sending joint positions at different intervals
-        time.sleep(1)
-        # Example target joint angles
-        arm_publisher.pub_arm(MIN_LEFT_JOINT_DEG_ANGLE,
-                              MIN_RIGHT_JOINT_DEG_ANGLE)
-        time.sleep(6)
-        # Update with new joint angles
-        arm_publisher.pub_arm(MAX_LEFT_JOINT_DEG_ANGLE,
-                              MAX_RIGHT_JOINT_DEG_ANGLE)
-        time.sleep(3)
-        # Reset to default positions
-        arm_publisher.pub_arm(DEFAULT_LEFT_JOINT_DEG_ANGLE,
-                              DEFAULT_RIGHT_JOINT_DEG_ANGLE)
-
-        # Allow time for publishing before shutting down
-        time.sleep(5)
+        arm_publisher.get_logger().info("Published MIN joint data.")
+        arm_publisher.pub_arm_with_speed(MIN_LEFT_JOINT_DEG_ANGLE,
+                                         MIN_RIGHT_JOINT_DEG_ANGLE,
+                                         duration=5.0,
+                                         fps=1.0)
+        arm_publisher.get_logger().info("Published MAX joint data.")
+        arm_publisher.pub_arm_with_speed(MAX_LEFT_JOINT_DEG_ANGLE,
+                                         MAX_RIGHT_JOINT_DEG_ANGLE,
+                                         duration=5.0,
+                                         fps=1.0)
+        arm_publisher.get_logger().info("Published DEFAULT joint data.")
+        arm_publisher.pub_arm_with_speed(DEFAULT_LEFT_JOINT_DEG_ANGLE,
+                                         DEFAULT_RIGHT_JOINT_DEG_ANGLE,
+                                         duration=5.0,
+                                         fps=1.0)
     except KeyboardInterrupt:
         pass
     finally:
