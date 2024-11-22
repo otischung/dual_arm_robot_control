@@ -37,38 +37,44 @@ class ControlPanel():
             {"src": PanelState.CONTROL_STEP, "dst": PanelState.CONTROL_STEP,
                 "key": KEY_MAP[curses.KEY_UP] | KEY_MAP[curses.KEY_DOWN], "sel": PanelSelect.ALL, "exec": self._control_step},
         ]
+        self._key_not_define: bool = False
+        self._trans_not_define: bool = False
+        self._msg_cnt: int = 0
+        self.key: int = 0
         self._cur_state: PanelState = PanelState.NORMAL
         self._cur_sel: PanelSelect = PanelSelect.LEFT
         self._cur_sel_joint: int = 0
         self._move_step = DEFAULT_JOINT_MOVE_STEP_DEG
         self.cur_joint_left = copy.deepcopy(DEFAULT_LEFT_JOINT_DEG_ANGLE)
         self.cur_joint_right = copy.deepcopy(DEFAULT_RIGHT_JOINT_DEG_ANGLE)
-        self._cur_sel_arm = self.cur_joint_left  # Start with the left joint array
+
         # Start with the left joint array
+        self._cur_sel_arm = self.cur_joint_left
         self._cur_sel_arm_min = MIN_LEFT_JOINT_DEG_ANGLE
-        # Start with the left joint array
         self._cur_sel_arm_max = MAX_LEFT_JOINT_DEG_ANGLE
 
         # Publisher for arm control
         self._arm_publisher = arm_publisher_
-        self._arm_publisher.pub_arm(self.cur_joint_left, self.cur_joint_right)
+        self._arm_publisher.pub_arm(
+            self.cur_joint_left,
+            self.cur_joint_right,
+            thread_id=self._msg_cnt,
+            show_info=False)
+        self._msg_cnt += 1
 
     def _display_single(self, stdscr, message: str, y_position: int, is_highlight: bool = False):
         style = curses.A_REVERSE if is_highlight else 0
         stdscr.addstr(y_position, 0, message, style)
 
-    def _display_menu(self, stdscr, y_position: int = 0):
+    def _display_menu(self, stdscr, y_position: int = 2):
         self._display_single(
-            stdscr, f"Panel State: {self._cur_state.name}", y_position)
-
+            stdscr, f"LEFT arm: {self.cur_joint_left}", y_position + 0, self._cur_sel == PanelSelect.LEFT)
         self._display_single(
-            stdscr, f"LEFT arm: {self.cur_joint_left}", y_position + 2, self._cur_sel == PanelSelect.LEFT)
+            stdscr, f"RIGHT arm: {self.cur_joint_right}", y_position + 1, self._cur_sel == PanelSelect.RIGHT)
         self._display_single(
-            stdscr, f"RIGHT arm: {self.cur_joint_right}", y_position + 3, self._cur_sel == PanelSelect.RIGHT)
+            stdscr, f"Move steps (deg): {self._move_step}", y_position + 2, self._cur_sel == PanelSelect.STEP)
         self._display_single(
-            stdscr, f"Move steps (deg): {self._move_step}", y_position + 4, self._cur_sel == PanelSelect.STEP)
-        self._display_single(
-            stdscr, "Reset all angles", y_position + 5, self._cur_sel == PanelSelect.RESET)
+            stdscr, "Reset all angles", y_position + 3, self._cur_sel == PanelSelect.RESET)
 
     def _display_control_joint(self, stdscr, y_position: int = 7):
         # Highlight the active element in the current array
@@ -129,14 +135,22 @@ class ControlPanel():
                 self._cur_sel_arm_max[self._cur_sel_joint]
             )
             self._arm_publisher.pub_arm(
-                self.cur_joint_left, self.cur_joint_right)
+                self.cur_joint_left,
+                self.cur_joint_right,
+                thread_id=self._msg_cnt,
+                show_info=False)
+            self._msg_cnt += 1
         elif key == curses.KEY_DOWN:
             self._cur_sel_arm[self._cur_sel_joint] = max(
                 self._cur_sel_arm[self._cur_sel_joint] - self._move_step,
                 self._cur_sel_arm_min[self._cur_sel_joint]
             )
             self._arm_publisher.pub_arm(
-                self.cur_joint_left, self.cur_joint_right)
+                self.cur_joint_left,
+                self.cur_joint_right,
+                thread_id=self._msg_cnt,
+                show_info=False)
+            self._msg_cnt += 1
         else:
             raise KeyError(
                 f"Error: The key {key} is not allowed in {self._control_select_joint.__name__}")
@@ -156,20 +170,47 @@ class ControlPanel():
     def reset_angle(self, key: int = None):
         self.cur_joint_left = copy.deepcopy(DEFAULT_LEFT_JOINT_DEG_ANGLE)
         self.cur_joint_right = copy.deepcopy(DEFAULT_RIGHT_JOINT_DEG_ANGLE)
-        self._arm_publisher.pub_arm(self.cur_joint_left, self.cur_joint_right)
+        self._arm_publisher.pub_arm(
+            self.cur_joint_left,
+            self.cur_joint_right,
+            thread_id=self._msg_cnt,
+            show_info=False)
+        self._msg_cnt += 1
         self._cur_sel = PanelSelect.LEFT
 
     def control_loop(self, stdscr):
         while True:
             stdscr.clear()
+
+            # Current state
+            self._display_single(
+                stdscr, f"Panel State: {self._cur_state.name}", 0)
+
+            # Error message
+            if self._key_not_define:
+                self._display_single(
+                    stdscr, f"Warning: The key {self.key} is not defined, ignoring.", 1)
+            elif self._trans_not_define:
+                self._display_single(
+                    stdscr, f"Warning: No transtition for key {self.key} in current state, ignoring.", 1)
+
+            # Menu
             self._display_menu(stdscr)
+
+            # Control
             if bool(self._cur_state & (PanelState.SELECT | PanelState.CONTROL_JOINT)):
                 self._display_control_joint(stdscr)
             elif self._cur_state == PanelState.CONTROL_STEP:
                 self._display_control_step(stdscr)
 
-            key = stdscr.getch()
-            key_bit = KEY_MAP[key]
+            self._key_not_define = False
+            self._trans_not_define = False
+            self.key = stdscr.getch()
+            try:
+                key_bit = KEY_MAP[self.key]
+            except KeyError:
+                self._key_not_define = True
+                continue
             trans: dict = None
 
             for trans_ in self._transitions:
@@ -182,13 +223,14 @@ class ControlPanel():
 
             # Check if there matches any transition rules.
             if trans is None:
-                raise KeyError(f"Error, there is NO matched transition for \
-                                key: {key}, panel state: {self._cur_state.name} \
-                                and panel select: {self._cur_sel.name}.")
+                self._trans_not_define = True
+                stdscr.refresh()
+                time.sleep(0.1)
+                continue
             else:
                 # Check if the transition rule needs to execute the desired function.
                 if trans["exec"] is not None:
-                    trans["exec"](key)
+                    trans["exec"](self.key)
 
                 # Move to the target state.
                 self._cur_state = trans["dst"]
