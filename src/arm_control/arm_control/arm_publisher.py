@@ -34,18 +34,21 @@ class ArmPublisher(Node):
     def _publish_trajectory(self,
                             joint_pos_left_deg: list,
                             joint_pos_right_deg: list,
-                            thread_id: int = 0):
+                            thread_id: int = 0,
+                            show_info: bool = True):
         if len(joint_pos_left_deg) != len(joint_pos_right_deg):
             self.get_logger().error("The number of joints in left is different from that in right.")
             self.destroy_node()
             return
 
         if self._stop_event.is_set():
-            self.get_logger().warning(
-                f"Publishing thread {thread_id} stopped.")
+            if show_info:
+                self.get_logger().warning(
+                    f"Publishing thread {thread_id} stopped.")
             return
 
-        self.get_logger().info(f"THREAD ID: {thread_id}")
+        if show_info:
+            self.get_logger().info(f"THREAD ID: {thread_id}")
         try:
             msg_left = JointTrajectoryPoint()
             msg_left.positions = [math.radians(
@@ -57,11 +60,13 @@ class ArmPublisher(Node):
                 pos) for pos in joint_pos_right_deg]
             msg_right.velocities = [0.0 for _ in joint_pos_right_deg]
 
-            self.get_logger().info(
-                f"Published LEFT joint data.\n{joint_pos_left_deg}")
+            if show_info:
+                self.get_logger().info(
+                    f"Published LEFT joint data.\n{joint_pos_left_deg}")
             self._joint_trajectory_publisher_left.publish(msg_left)
-            self.get_logger().info(
-                f"Published RIGHT joint data.\n{joint_pos_right_deg}")
+            if show_info:
+                self.get_logger().info(
+                    f"Published RIGHT joint data.\n{joint_pos_right_deg}")
             self._joint_trajectory_publisher_right.publish(msg_right)
 
         except Exception as e:
@@ -76,7 +81,11 @@ class ArmPublisher(Node):
                 self._publish_thread.join()
         super().destroy_node()
 
-    def pub_arm(self, joint_pos_left_deg: list, joint_pos_right_deg: list, thread_id: int = 0):
+    def pub_arm(self,
+                joint_pos_left_deg: list,
+                joint_pos_right_deg: list,
+                thread_id: int = 0,
+                show_info: bool = True):
         # Stop the current publishing thread if it's running
         with self._publish_lock:
             if self._publish_thread and self._publish_thread.is_alive():
@@ -87,7 +96,7 @@ class ArmPublisher(Node):
             self._stop_event.clear()
             self._publish_thread = threading.Thread(
                 target=self._publish_trajectory,
-                args=(joint_pos_left_deg, joint_pos_right_deg, thread_id)
+                args=(joint_pos_left_deg, joint_pos_right_deg, thread_id, show_info)
             )
             self._publish_thread.start()
 
@@ -126,7 +135,8 @@ class ArmPublisher(Node):
                                    speed: float = 5.0,
                                    duration: float = 1.0,
                                    fps: float = 10.0,
-                                   thread_id: int = 0):
+                                   thread_id: int = 0,
+                                   show_info: bool = True):
         # Calculate frames for each step in the movement
         left_frames, right_frames = self._cal_pub_frame_list(
             dest_left_joint_deg_angle,
@@ -139,8 +149,9 @@ class ArmPublisher(Node):
         # Publish each frame, checking the stop_event before each publish
         for left_frame, right_frame in zip(left_frames, right_frames):
             if self._stop_event.is_set():
-                self.get_logger().warning(
-                    f"Publishing thread {thread_id} stopped.")
+                if show_info:
+                    self.get_logger().warning(
+                        f"Publishing thread {thread_id} stopped.")
                 return
 
             # Publish the current frame
@@ -162,7 +173,8 @@ class ArmPublisher(Node):
                            speed: float = 5.0,
                            duration: float = 1.0,
                            fps: float = 10.0,
-                           thread_id: int = 0):
+                           thread_id: int = 0,
+                           show_info: bool = True):
         # Stop the current publishing thread if it's running
         with self._publish_lock:
             if self._publish_thread and self._publish_thread.is_alive():
@@ -179,7 +191,8 @@ class ArmPublisher(Node):
                     speed,
                     duration,
                     fps,
-                    thread_id
+                    thread_id,
+                    show_info
                 )
             )
             self._publish_thread.start()
@@ -207,7 +220,8 @@ def main(args=None):
                                          MIN_RIGHT_JOINT_DEG_ANGLE,
                                          duration=5.0,
                                          fps=1.0,
-                                         thread_id=0)
+                                         thread_id=0,
+                                         show_info=True)
         time.sleep(2)
         arm_publisher.get_logger().info("-------------------------------------")
         arm_publisher.get_logger().info("----- Published MAX joint data. -----")
@@ -216,7 +230,8 @@ def main(args=None):
                                          MAX_RIGHT_JOINT_DEG_ANGLE,
                                          duration=5.0,
                                          fps=1.0,
-                                         thread_id=1)
+                                         thread_id=1,
+                                         show_info=True)
         time.sleep(2)
         arm_publisher.get_logger().info("-------------------------------------")
         arm_publisher.get_logger().info("--- Published DEFAULT joint data. ---")
@@ -225,7 +240,8 @@ def main(args=None):
                                          DEFAULT_RIGHT_JOINT_DEG_ANGLE,
                                          duration=5.0,
                                          fps=1.0,
-                                         thread_id=2)
+                                         thread_id=2,
+                                         show_info=True)
         time.sleep(5)
     except KeyboardInterrupt:
         pass
