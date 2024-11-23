@@ -37,6 +37,18 @@ class ArmSide(IntEnum):
     ALL = 0xffffffff
 
 
+class ParamSelect(IntEnum):
+    """Declare the enum for the parameters.
+    The items must be sorted.
+    The `ALL` bitmask is also included but is not meant to be set.
+    """
+    STEP = 0x00000001
+    SPEED = 0x00000002
+    DURATION = 0x00000004
+    FPS = 0x00000008
+    ALL = 0x00000010
+
+
 class PanelState(IntEnum):
     """Declare the enum for state of control panel
     The items must be sorted.
@@ -44,9 +56,10 @@ class PanelState(IntEnum):
     """
     EXIT = 0x00000001
     NORMAL = 0x00000002
-    SELECT = 0x00000004
-    CONTROL_JOINT = 0x00000008
-    CONTROL_STEP = 0x000000010
+    SELECT_JOINT = 0x00000004
+    SELECT_PARAM = 0x00000008
+    CONTROL_JOINT = 0x00000010
+    CONTROL_PARAM = 0x000000020
     ALL = 0xffffffff
 
 
@@ -57,9 +70,57 @@ class PanelSelect(IntEnum):
     """
     LEFT = 0x00000001
     RIGHT = 0x00000002
-    STEP = 0x00000004
+    PARAM = 0x00000004
     RESET = 0x00000008
     ALL = 0xffffffff
+
+
+def count_trailing_zeros_bitwise(n: int) -> int:
+    """Return the trailing zeros of the given integer.
+
+    This function is useful for determining whether an integer is a power of 2.
+    If the given integer is a power of 2, the number of trailing zeros in its binary
+    representation corresponds to the exponent of the base 2.
+
+    Args:
+        n (int): The given integer.
+
+    Returns:
+        int: The number of the trailing zeros.
+
+    Example:
+        >>> count_trailing_zeros_bitwise(0x00000010)
+        The answer is 4.
+    """
+    return (n & -n).bit_length() - 1 if n != 0 else 0
+
+
+def get_len_bitwise_enum(enum_class: Type[IntEnum]) -> int:
+    """Returns the length of the bitwise-based IntEnum class
+
+    This function ignores `ALL` item.
+
+    Args:
+        enum_class (Type[IntEnum]): The class type of the enum.
+
+    Returns:
+        int: The length of the bitwise-based IntEnum class.
+    """
+    return len(enum_class) - 1 if 'ALL' in enum_class.__members__ else len(enum_class)
+
+
+def get_max_bitwise_enum(enum_class: Type[IntEnum]) -> int:
+    """Returns the max value of the bitwise-based IntEnum class
+
+    This function ignores `ALL` item.
+
+    Args:
+        enum_class (Type[IntEnum]): The class type of the enum.
+
+    Returns:
+        int: The max value of the bitwise-based IntEnum class.
+    """
+    return 1 << (get_len_bitwise_enum(enum_class) - 1)
 
 
 def next_bitwise_enum(cur: IntEnum, enum_class: Type[IntEnum]) -> IntEnum:
@@ -80,9 +141,7 @@ def next_bitwise_enum(cur: IntEnum, enum_class: Type[IntEnum]) -> IntEnum:
         >>> cur_sel = next_bitwise_enum(cur_sel, PanelSelect)
     """
     # Determine the shift based on the presence of `ALL` in the enum
-    shift = len(enum_class) - \
-        2 if 'ALL' in enum_class.__members__ else len(enum_class) - 1
-    max_value = 1 << shift
+    max_value = get_max_bitwise_enum(enum_class)
 
     # Shift left to get the next item
     next_value = cur << 1
@@ -112,9 +171,7 @@ def prev_bitwise_enum(cur: IntEnum, enum_class: Type[IntEnum]) -> IntEnum:
         >>> cur_sel = prev_bitwise_enum(cur_sel, PanelSelect)
     """
     # Determine the shift based on the presence of `ALL` in the enum
-    shift = len(enum_class) - \
-        2 if 'ALL' in enum_class.__members__ else len(enum_class) - 1
-    max_value = 1 << shift
+    max_value = get_max_bitwise_enum(enum_class)
 
     # Shift left to get the previous item
     prev_value = cur >> 1
