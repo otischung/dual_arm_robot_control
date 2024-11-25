@@ -307,7 +307,7 @@ def main(args=None):
                                          fps=DEFAULT_FPS,
                                          thread_id=0,
                                          show_info=True)
-        time.sleep(0.5)
+        time.sleep(0.8)
         arm_publisher.get_logger().info("-------------------------------------")
         arm_publisher.get_logger().info("----- Published MAX joint data. -----")
         arm_publisher.get_logger().info("-------------------------------------")
@@ -318,7 +318,7 @@ def main(args=None):
                                          fps=DEFAULT_FPS,
                                          thread_id=1,
                                          show_info=True)
-        time.sleep(0.5)
+        time.sleep(0.8)
         arm_publisher.get_logger().info("-------------------------------------")
         arm_publisher.get_logger().info("--- Published DEFAULT joint data. ---")
         arm_publisher.get_logger().info("-------------------------------------")
@@ -329,7 +329,10 @@ def main(args=None):
                                          fps=DEFAULT_FPS,
                                          thread_id=2,
                                          show_info=True)
-        time.sleep(18.5)
+        # Spin lock until the last step finishes.
+        while arm_publisher._publish_thread.is_alive():
+            time.sleep(1)
+
     except KeyboardInterrupt:
         pass
     finally:
