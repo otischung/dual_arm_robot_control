@@ -96,30 +96,45 @@ class ArmPublisher(Node):
             self._stop_event.clear()
             self._publish_thread = threading.Thread(
                 target=self._publish_trajectory,
-                args=(joint_pos_left_deg, joint_pos_right_deg, thread_id, show_info)
+                args=(joint_pos_left_deg, joint_pos_right_deg,
+                      thread_id, show_info)
             )
             self._publish_thread.start()
 
-    def _cal_pub_frame_list(self,
-                            dest_left_joint_deg_angle: list,
-                            dest_right_joint_deg_angle: list,
-                            speed: float,
-                            duration: float,
-                            fps: float) -> tuple[list[list], list[list]]:
-        num_frames = int(fps * duration)  # Total frames to publish
-        time_step = 1.0 / fps  # Time per frame
+    def _cal_pub_frame_list_by_speed(self,
+                                     dest_left_joint_deg_angle: list,
+                                     dest_right_joint_deg_angle: list,
+                                     speed: float,
+                                     fps: float) -> tuple[list[list], list[list]]:
+        """Calculates the intermediate joint angles for a trajectory based on the max speed.
 
+        The duration is calculated based on the farthest distance between the joints,
+        and the speed is then used to calculate the duration for each joint.
+        As a result, the speed is slower for shorter movement distances.
+
+        Args:
+            dest_left_joint_deg_angle (list): Target angles for the left joints in degrees.
+            dest_right_joint_deg_angle (list): Target angles for the right joints in degrees.
+            speed (float): Movement speed in degrees per second.
+            fps (float): Frames per second for the publisher.
+
+        Returns:
+            tuple[list[list], list[list]]: Two lists of intermediate joint angles for the
+                left and right joints, respectively, for each frame in the publisher.
+        """
         # Calculate the joint position differences
-        diff_left = np.subtract(dest_left_joint_deg_angle,
-                                self.prev_left_joint_deg_angle)
-        diff_right = np.subtract(
+        diff_left: np.ndarray = np.subtract(dest_left_joint_deg_angle,
+                                            self.prev_left_joint_deg_angle)
+        diff_right: np.ndarray = np.subtract(
             dest_right_joint_deg_angle, self.prev_right_joint_deg_angle)
 
         # Calculate maximum possible frames based on speed constraint
-        max_frames_left = max(abs(diff_left) / speed / time_step)
-        max_frames_right = max(abs(diff_right) / speed / time_step)
-        num_frames = min(num_frames, int(
-            max(max_frames_left, max_frames_right)))
+        duration_left: np.ndarray = np.absolute(diff_left) / speed
+        duration_right: np.ndarray = np.absolute(diff_right) / speed
+        max_frames_left: float = max(duration_left * fps)
+        max_frames_right: float = max(duration_right * fps)
+        # Total frames to publish
+        num_frames: int = int(max(max_frames_left, max_frames_right))
 
         # Generate intermediate joint angles for each frame
         left_frames = [self.prev_left_joint_deg_angle +
@@ -129,22 +144,78 @@ class ArmPublisher(Node):
 
         return left_frames, right_frames
 
-    def _pub_trajectory_with_speed(self,
+    def _cal_pub_frame_list_by_duration(self,
+                                        dest_left_joint_deg_angle: list,
+                                        dest_right_joint_deg_angle: list,
+                                        duration: float,
+                                        fps: float) -> tuple[list[list], list[list]]:
+        """Calculates the intermediate joint angles for a trajectory based on duration.
+
+        The duration is the same for all joint movements, so the speed increases when the movement distance is longer.
+
+        Args:
+            dest_left_joint_deg_angle (list): Target angles for the left joints in degrees.
+            dest_right_joint_deg_angle (list): Target angles for the right joints in degrees.
+            duration (float): Total duration of the publisher in seconds.
+            fps (float): Frames per second for the publisher.
+
+        Returns:
+            tuple[list[list], list[list]]: Two lists of intermediate joint angles for the 
+            left and right joints, respectively, for each frame in the publisher.
+        """
+        # Calculate the joint position differences
+        diff_left: np.ndarray = np.subtract(dest_left_joint_deg_angle,
+                                            self.prev_left_joint_deg_angle)
+        diff_right: np.ndarray = np.subtract(
+            dest_right_joint_deg_angle, self.prev_right_joint_deg_angle)
+
+        # Total frames to publish
+        num_frames: int = int(duration * fps)
+
+        # Generate intermediate joint angles for each frame
+        left_frames = [self.prev_left_joint_deg_angle +
+                       (diff_left * (i / num_frames)) for i in range(1, num_frames + 1)]
+        right_frames = [self.prev_right_joint_deg_angle +
+                        (diff_right * (i / num_frames)) for i in range(1, num_frames + 1)]
+
+        return left_frames, right_frames
+
+    def _pub_trajectory_with_param(self,
                                    dest_left_joint_deg_angle: list,
                                    dest_right_joint_deg_angle: list,
-                                   speed: float = DEFAULT_SPEED_DEG_PER_SEC,
-                                   duration: float = DEFAULT_DURATION_SEC,
+                                   param: float = DEFAULT_SPEED_DEG_PER_SEC,
+                                   is_speed: bool = True,
                                    fps: float = DEFAULT_FPS,
                                    thread_id: int = 0,
                                    show_info: bool = True):
+        """Publishes a trajectory to move the joints using the specified parameter.
+
+        Args:
+            dest_left_joint_deg_angle (list): Target angles for the left joints in degrees.
+            dest_right_joint_deg_angle (list): Target angles for the right joints in degrees.
+            param (float, optional): Movement speed in degrees per second if `is_speed` is True, 
+                otherwise the duration of the publisher in seconds. Defaults to DEFAULT_SPEED_DEG_PER_SEC.
+            is_speed (bool, optional): Indicates whether `param` represents speed or duration. Defaults to True,
+                which means the meaning of the param is movement speed in degrees.
+            fps (float, optional): Frames per second for the publisher. Defaults to DEFAULT_FPS.
+            thread_id (int, optional): Identifier for the thread publishing the publisher. Defaults to 0.
+            show_info (bool, optional): Whether to log information about the thread stopping. Defaults to True.
+        """
         # Calculate frames for each step in the movement
-        left_frames, right_frames = self._cal_pub_frame_list(
-            dest_left_joint_deg_angle,
-            dest_right_joint_deg_angle,
-            speed,
-            duration,
-            fps
-        )
+        if is_speed:
+            left_frames, right_frames = self._cal_pub_frame_list_by_speed(
+                dest_left_joint_deg_angle,
+                dest_right_joint_deg_angle,
+                param,
+                fps
+            )
+        else:
+            left_frames, right_frames = self._cal_pub_frame_list_by_duration(
+                dest_left_joint_deg_angle,
+                dest_right_joint_deg_angle,
+                param,
+                fps
+            )
 
         # Publish each frame, checking the stop_event before each publish
         for left_frame, right_frame in zip(left_frames, right_frames):
@@ -167,14 +238,27 @@ class ArmPublisher(Node):
         # self.prev_left_joint_deg_angle = dest_left_joint_deg_angle
         # self.prev_right_joint_deg_angle = dest_right_joint_deg_angle
 
-    def pub_arm_with_speed(self,
+    def pub_arm_with_param(self,
                            dest_left_joint_deg_angle: list,
                            dest_right_joint_deg_angle: list,
-                           speed: float = DEFAULT_SPEED_DEG_PER_SEC,
-                           duration: float = DEFAULT_DURATION_SEC,
+                           param: float = DEFAULT_SPEED_DEG_PER_SEC,
+                           is_speed: bool = True,
                            fps: float = DEFAULT_FPS,
                            thread_id: int = 0,
                            show_info: bool = True):
+        """Starts a new thread to publish a trajectory for the joints using the specified parameter.
+
+        Args:
+            dest_left_joint_deg_angle (list): Target angles for the left joints in degrees.
+            dest_right_joint_deg_angle (list): Target angles for the right joints in degrees.
+            param (float, optional): Movement speed in degrees per second if `is_speed` is True, 
+                otherwise the duration of the publisher in seconds. Defaults to DEFAULT_SPEED_DEG_PER_SEC.
+            is_speed (bool, optional): Indicates whether `param` represents speed or duration. Defaults to True,
+                which means the meaning of the param is movement speed in degrees.
+            fps (float, optional): Frames per second for the publisher. Defaults to DEFAULT_FPS.
+            thread_id (int, optional): Identifier for the thread publishing the publisher. Defaults to 0.
+            show_info (bool, optional): Whether to log information about the thread stopping. Defaults to True.
+        """
         # Stop the current publishing thread if it's running
         with self._publish_lock:
             if self._publish_thread and self._publish_thread.is_alive():
@@ -184,12 +268,12 @@ class ArmPublisher(Node):
             # Reset the stop event and start a new publishing thread
             self._stop_event.clear()
             self._publish_thread = threading.Thread(
-                target=self._pub_trajectory_with_speed,
+                target=self._pub_trajectory_with_param,
                 args=(
                     dest_left_joint_deg_angle,
                     dest_right_joint_deg_angle,
-                    speed,
-                    duration,
+                    param,
+                    is_speed,
                     fps,
                     thread_id,
                     show_info
@@ -216,36 +300,36 @@ def main(args=None):
         arm_publisher.get_logger().info("-------------------------------------")
         arm_publisher.get_logger().info("----- Published MIN joint data. -----")
         arm_publisher.get_logger().info("-------------------------------------")
-        arm_publisher.pub_arm_with_speed(MIN_LEFT_JOINT_DEG_ANGLE,
+        arm_publisher.pub_arm_with_param(MIN_LEFT_JOINT_DEG_ANGLE,
                                          MIN_RIGHT_JOINT_DEG_ANGLE,
-                                         speed=DEFAULT_SPEED_DEG_PER_SEC,
-                                         duration=DEFAULT_DURATION_SEC,
+                                         param=DEFAULT_DURATION_SEC,
+                                         is_speed=False,
                                          fps=DEFAULT_FPS,
                                          thread_id=0,
                                          show_info=True)
-        time.sleep(2)
+        time.sleep(0.5)
         arm_publisher.get_logger().info("-------------------------------------")
         arm_publisher.get_logger().info("----- Published MAX joint data. -----")
         arm_publisher.get_logger().info("-------------------------------------")
-        arm_publisher.pub_arm_with_speed(MAX_LEFT_JOINT_DEG_ANGLE,
+        arm_publisher.pub_arm_with_param(MAX_LEFT_JOINT_DEG_ANGLE,
                                          MAX_RIGHT_JOINT_DEG_ANGLE,
-                                         speed=DEFAULT_SPEED_DEG_PER_SEC,
-                                         duration=DEFAULT_DURATION_SEC,
+                                         param=DEFAULT_DURATION_SEC,
+                                         is_speed=False,
                                          fps=DEFAULT_FPS,
                                          thread_id=1,
                                          show_info=True)
-        time.sleep(2)
+        time.sleep(0.5)
         arm_publisher.get_logger().info("-------------------------------------")
         arm_publisher.get_logger().info("--- Published DEFAULT joint data. ---")
         arm_publisher.get_logger().info("-------------------------------------")
-        arm_publisher.pub_arm_with_speed(DEFAULT_LEFT_JOINT_DEG_ANGLE,
+        arm_publisher.pub_arm_with_param(DEFAULT_LEFT_JOINT_DEG_ANGLE,
                                          DEFAULT_RIGHT_JOINT_DEG_ANGLE,
-                                         speed=DEFAULT_SPEED_DEG_PER_SEC,
-                                         duration=DEFAULT_DURATION_SEC,
+                                         param=DEFAULT_SPEED_DEG_PER_SEC,
+                                         is_speed=True,
                                          fps=DEFAULT_FPS,
                                          thread_id=2,
                                          show_info=True)
-        time.sleep(5)
+        time.sleep(18.5)
     except KeyboardInterrupt:
         pass
     finally:
