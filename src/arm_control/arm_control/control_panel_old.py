@@ -12,7 +12,7 @@ class ControlPanel():
         self._transitions = [
             # Enter and Esc Keys
             {"src": PanelState.NORMAL, "dst": PanelState.NORMAL,
-                "key": KEY_MAP[KEY_ENTER], "sel": PanelSelect.RESET, "exec": self.reset_angle},
+                "key": KEY_MAP[KEY_ENTER], "sel": PanelSelect.RESET_ANGLE, "exec": self.reset_angle},
             {"src": PanelState.NORMAL, "dst": PanelState.SELECT_JOINT,
                 "key": KEY_MAP[KEY_ENTER], "sel": PanelSelect.LEFT | PanelSelect.RIGHT, "exec": self._change_select_arm},
             {"src": PanelState.NORMAL, "dst": PanelState.SELECT_PARAM,
@@ -92,7 +92,7 @@ class ControlPanel():
         self._display_single(
             stdscr, f"Step (deg): {self._param[0]}, speed (deg/s): {self._param[1]}, duration (sec): {self._param[2]}, fps: {self._param[3]}", y_position + 2, self._cur_sel == PanelSelect.PARAM)
         self._display_single(
-            stdscr, "Reset all angles", y_position + 3, self._cur_sel == PanelSelect.RESET)
+            stdscr, "Reset all angles", y_position + 3, self._cur_sel == PanelSelect.RESET_ANGLE)
 
     def _display_control_joint(self, stdscr, y_position: int = 7):
         # Highlight the active element in the current array

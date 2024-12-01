@@ -30,29 +30,39 @@ KEY_MAP = {
 class ArmSide(IntEnum):
     """Declare the enum for LEFT and RIGHT arm
     The items must be sorted.
-    The `ALL` bitmask is also included but is not meant to be set.
+    The ALL bitmask is also included but is not meant to be set.
     """
     LEFT = 0x00000001
     RIGHT = 0x00000002
-    ALL = 0xffffffff
+    ALL = 0x7fffffff
+
+
+class ParamMode(IntEnum):
+    """Declare the eum for SPEED and DURATION mode of the parameter.
+    The items must be sorted.
+    The ALL bitmask is also included but is not meant to be set.
+    """
+    SPEED = 0x00000001
+    DURATION = 0x00000002
+    ALL = 0x7fffffff
 
 
 class ParamSelect(IntEnum):
     """Declare the enum for the parameters.
     The items must be sorted.
-    The `ALL` bitmask is also included but is not meant to be set.
+    The ALL bitmask is also included but is not meant to be set.
     """
     STEP = 0x00000001
-    SPEED = 0x00000002
-    DURATION = 0x00000004
+    MODE = 0x00000002
+    PARAM = 0x00000004
     FPS = 0x00000008
-    ALL = 0x00000010
+    ALL = 0x7fffffff
 
 
 class PanelState(IntEnum):
     """Declare the enum for state of control panel
     The items must be sorted.
-    The `ALL` bitmask is also included but is not meant to be set.
+    The ALL bitmask is also included but is not meant to be set.
     """
     EXIT = 0x00000001
     NORMAL = 0x00000002
@@ -60,19 +70,20 @@ class PanelState(IntEnum):
     SELECT_PARAM = 0x00000008
     CONTROL_JOINT = 0x00000010
     CONTROL_PARAM = 0x000000020
-    ALL = 0xffffffff
+    ALL = 0x7fffffff
 
 
 class PanelSelect(IntEnum):
     """Declare the enum for option of control panel
     The items must be sorted.
-    The `ALL` bitmask is also included but is not meant to be set.
+    The ALL bitmask is also included but is not meant to be set.
     """
     LEFT = 0x00000001
     RIGHT = 0x00000002
     PARAM = 0x00000004
-    RESET = 0x00000008
-    ALL = 0xffffffff
+    RESET_ANGLE = 0x00000008
+    RESET_PARAM = 0x00000010
+    ALL = 0x7fffffff
 
 
 def count_trailing_zeros_bitwise(n: int) -> int:
