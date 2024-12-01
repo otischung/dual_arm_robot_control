@@ -133,6 +133,18 @@ class ControlJointState(State):
         elif bool(KEY_MAP[key] & KEY_MAP[curses.KEY_DOWN]):
             self.tui.decrease_joint()
 
+        # Publish data
+        if bool(KEY_MAP[key] & (KEY_MAP[curses.KEY_UP] | KEY_MAP[curses.KEY_DOWN])):
+            self.tui.arm_publisher.pub_arm_with_param(
+                self.tui.cur_joint_left,
+                self.tui.cur_joint_right,
+                self.tui.param,
+                self.tui.param_mode == ParamMode.SPEED,
+                self.tui.fps,
+                thread_id=self.tui.msg_cnt,
+                show_info=False)
+            self.tui.msg_cnt += 1
+
     # override
     def render(self, stdscr):
         self.tui.display_single(stdscr, STATE_POS, "Panel State: Control Joint State")
@@ -178,11 +190,11 @@ class ControlParamState(State):
 
             if not error:
                 if self.tui.cur_sel_param == ParamSelect.STEP:
-                    self.tui.step = value
+                    self.tui.step = abs(value)
                 elif self.tui.cur_sel_param == ParamSelect.PARAM:
-                    self.tui.param = value
+                    self.tui.param = abs(value)
                 elif self.tui.cur_sel_param == ParamSelect.FPS:
-                    self.tui.fps = value
+                    self.tui.fps = abs(value)
 
             self.tui.change_state(SelectParamState)
 
@@ -228,7 +240,7 @@ class TUI:
         self.fps: float = DEFAULT_FPS
 
         # Publisher for arm control
-        self.arm_publisher = arm_publisher_
+        self.arm_publisher: ArmPublisher = arm_publisher_
         self.msg_cnt: int = 0
 
         # Publish the initial joint angles

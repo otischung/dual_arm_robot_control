@@ -136,11 +136,16 @@ class ArmPublisher(Node):
         # Total frames to publish
         num_frames: int = int(max(max_frames_left, max_frames_right))
 
-        # Generate intermediate joint angles for each frame
-        left_frames = [self.prev_left_joint_deg_angle +
-                       (diff_left * (i / num_frames)) for i in range(1, num_frames + 1)]
-        right_frames = [self.prev_right_joint_deg_angle +
-                        (diff_right * (i / num_frames)) for i in range(1, num_frames + 1)]
+        # Handle cases where num_frames is less than 1
+        if num_frames < 1:
+            left_frames = [dest_left_joint_deg_angle]
+            right_frames = [dest_right_joint_deg_angle]
+        else:
+            # Generate intermediate joint angles for each frame
+            left_frames = [self.prev_left_joint_deg_angle +
+                        (diff_left * (i / num_frames)) for i in range(1, num_frames + 1)]
+            right_frames = [self.prev_right_joint_deg_angle +
+                            (diff_right * (i / num_frames)) for i in range(1, num_frames + 1)]
 
         return left_frames, right_frames
 
@@ -172,11 +177,16 @@ class ArmPublisher(Node):
         # Total frames to publish
         num_frames: int = int(duration * fps)
 
-        # Generate intermediate joint angles for each frame
-        left_frames = [self.prev_left_joint_deg_angle +
-                       (diff_left * (i / num_frames)) for i in range(1, num_frames + 1)]
-        right_frames = [self.prev_right_joint_deg_angle +
-                        (diff_right * (i / num_frames)) for i in range(1, num_frames + 1)]
+        # Handle cases where num_frames is less than 1
+        if num_frames < 1:
+            left_frames = [dest_left_joint_deg_angle]
+            right_frames = [dest_right_joint_deg_angle]
+        else:
+            # Generate intermediate joint angles for each frame
+            left_frames = [self.prev_left_joint_deg_angle +
+                           (diff_left * (i / num_frames)) for i in range(1, num_frames + 1)]
+            right_frames = [self.prev_right_joint_deg_angle +
+                            (diff_right * (i / num_frames)) for i in range(1, num_frames + 1)]
 
         return left_frames, right_frames
 
@@ -226,7 +236,7 @@ class ArmPublisher(Node):
                 return
 
             # Publish the current frame
-            self._publish_trajectory(left_frame, right_frame, thread_id)
+            self._publish_trajectory(left_frame, right_frame, thread_id, show_info)
             # Update previous angles to the current angles
             self.prev_left_joint_deg_angle = left_frame
             self.prev_right_joint_deg_angle = right_frame
