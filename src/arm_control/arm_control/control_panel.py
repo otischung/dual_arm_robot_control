@@ -1,291 +1,401 @@
 import copy
 import curses
 import rclpy
+from abc import ABC, abstractmethod
 from arm_control.arm_publisher import *
 from arm_control.params import *
 from arm_control.utils import *
 
+# A circular dependency exists between the TUI and the State class,
+# requiring them to be implemented together in a single file.
 
-class ControlPanel():
+
+##############################
+########### States ###########
+##############################
+
+# Abstract Base Class for States
+class State(ABC):
+    def __init__(self, tui):
+        self.tui = tui
+
+    @abstractmethod
+    def handle_input(self, key: int):
+        """Handle keyboard input for the current state."""
+        pass
+
+    @abstractmethod
+    def render(self, stdscr):
+        """Render the screen for the current state."""
+        pass
+
+
+# Concrete States
+class NormalState(State):
+    # override. The @override decorator is only supported in Python 3.12+
+    def handle_input(self, key: int):
+        if key not in KEY_MAP:
+            return
+
+        if bool(KEY_MAP[key] & KEY_MAP[curses.KEY_UP]):
+            self.tui.select_prev_item()
+        elif bool(KEY_MAP[key] & KEY_MAP[curses.KEY_DOWN]):
+            self.tui.select_next_item()
+        elif bool(KEY_MAP[key] & KEY_MAP[KEY_ENTER]):
+            if bool(self.tui.cur_sel & PanelSelect.LEFT):
+                self.tui.set_to_left()
+                self.tui.change_state(SelectJointState)
+            elif bool(self.tui.cur_sel & PanelSelect.RIGHT):
+                self.tui.set_to_right()
+                self.tui.change_state(SelectJointState)
+            elif bool(self.tui.cur_sel & PanelSelect.PARAM):
+                self.tui.change_state(SelectParamState)
+            elif bool(self.tui.cur_sel & PanelSelect.RESET_ANGLE):
+                self.tui.reset_angle()
+            elif bool(self.tui.cur_sel & PanelSelect.RESET_PARAM):
+                self.tui.reset_param()
+        elif bool(KEY_MAP[key] & KEY_MAP[KEY_ESC]):
+            self.tui.change_state(ExitState)
+
+    # override
+    def render(self, stdscr):
+        self.tui.display_single(stdscr, STATE_POS, "Panel State: Normal State")
+        self.tui.display_menu(stdscr)
+
+
+class ExitState(State):
+    # override
+    def handle_input(self, key):
+        pass  # No interaction in exit state
+
+    # override
+    def render(self, stdscr):
+        pass
+
+
+class SelectJointState(State):
+    # override
+    def handle_input(self, key):
+        if key not in KEY_MAP:
+            return
+
+        if bool(KEY_MAP[key] & KEY_MAP[KEY_ESC]):
+            self.tui.change_state(NormalState)
+        elif bool(KEY_MAP[key] & KEY_MAP[KEY_ENTER]):
+            self.tui.change_state(ControlJointState)
+        elif bool(KEY_MAP[key] & KEY_MAP[curses.KEY_UP]):
+            self.tui.select_prev_joint()
+        elif bool(KEY_MAP[key] & KEY_MAP[curses.KEY_DOWN]):
+            self.tui.select_next_joint()
+
+    # override
+    def render(self, stdscr):
+        self.tui.display_single(stdscr, STATE_POS, "Panel State: Select Joint State")
+        self.tui.display_menu(stdscr)
+        self.tui.display_sel_joint(stdscr)
+
+
+class SelectParamState(State):
+    # override
+    def handle_input(self, key):
+        if key not in KEY_MAP:
+            return
+
+        if bool(KEY_MAP[key] & KEY_MAP[KEY_ESC]):
+            self.tui.change_state(NormalState)
+        elif bool(KEY_MAP[key] & KEY_MAP[KEY_ENTER]):
+            if self.tui.cur_sel_param == ParamSelect.MODE:
+                self.tui.change_state(ControlParamModeState)
+            else:
+                self.tui.change_state(ControlParamState)
+        elif bool(KEY_MAP[key] & KEY_MAP[curses.KEY_UP]):
+            self.tui.select_prev_param()
+        elif bool(KEY_MAP[key] & KEY_MAP[curses.KEY_DOWN]):
+            self.tui.select_next_param()
+
+    # override
+    def render(self, stdscr):
+        self.tui.display_single(stdscr, STATE_POS, "Panel State: Select Param State")
+        self.tui.display_menu(stdscr)
+        self.tui.display_sel_param(stdscr)
+
+
+class ControlJointState(State):
+    # override
+    def handle_input(self, key):
+        if key not in KEY_MAP:
+            return
+
+        if bool(KEY_MAP[key] & KEY_MAP[KEY_ESC]):
+            self.tui.change_state(SelectJointState)
+        elif bool(KEY_MAP[key] & KEY_MAP[curses.KEY_UP]):
+            self.tui.increase_joint()
+        elif bool(KEY_MAP[key] & KEY_MAP[curses.KEY_DOWN]):
+            self.tui.decrease_joint()
+
+        # Publish data
+        if bool(KEY_MAP[key] & (KEY_MAP[curses.KEY_UP] | KEY_MAP[curses.KEY_DOWN])):
+            self.tui.arm_publisher.pub_arm_with_param(
+                self.tui.cur_joint_left,
+                self.tui.cur_joint_right,
+                self.tui.param,
+                self.tui.param_mode == ParamMode.SPEED,
+                self.tui.fps,
+                thread_id=self.tui.msg_cnt,
+                show_info=False)
+            self.tui.msg_cnt += 1
+
+    # override
+    def render(self, stdscr):
+        self.tui.display_single(stdscr, STATE_POS, "Panel State: Control Joint State")
+        self.tui.display_menu(stdscr)
+        self.tui.display_control_joint(stdscr)
+
+
+class ControlParamModeState(State):
+    # override
+    def handle_input(self, key):
+        if key not in KEY_MAP:
+            return
+
+        if bool(KEY_MAP[key] & KEY_MAP[KEY_ESC]):
+            self.tui.change_state(SelectParamState)
+        elif bool(KEY_MAP[key] & KEY_MAP[curses.KEY_UP]):
+            self.tui.select_prev_mode()
+        elif bool(KEY_MAP[key] & KEY_MAP[curses.KEY_DOWN]):
+            self.tui.select_next_mode()
+
+    # override
+    def render(self, stdscr):
+        self.tui.display_single(stdscr, STATE_POS, "Panel State: Control Param Mode State")
+        self.tui.display_menu(stdscr)
+        self.tui.display_control_param(stdscr)
+
+
+class ControlParamState(State):
+    def __init__(self, tui):
+        super().__init__(tui)
+        self.input_string = ""  # Stores the user input
+
+    # override
+    def handle_input(self, key):
+        error: bool = False
+
+        # We will get keyboard input here and thus we don't use the KEY_MAP dictionary.
+        if key == KEY_ESC or key in [curses.KEY_ENTER, 10, 13]:
+            try:
+                value = float(self.input_string)
+            except Exception as e:
+                error = True
+
+            if not error:
+                if self.tui.cur_sel_param == ParamSelect.STEP:
+                    self.tui.step = abs(value)
+                elif self.tui.cur_sel_param == ParamSelect.PARAM:
+                    self.tui.param = abs(value)
+                elif self.tui.cur_sel_param == ParamSelect.FPS:
+                    self.tui.fps = abs(value)
+
+            self.tui.change_state(SelectParamState)
+
+        elif key in range(32, 127):  # ASCII printable characters
+            self.input_string += chr(key)  # Add character to the input string
+        elif key == curses.KEY_BACKSPACE or key == KEY_BACKSPACE:  # Handle backspace
+            self.input_string = self.input_string[:-1]  # Remove last character
+
+    # override
+    def render(self, stdscr):
+        self.tui.display_single(stdscr, STATE_POS, "Panel State: Control Param State")
+        self.tui.display_menu(stdscr)
+        self.tui.display_control_param(stdscr)
+
+        # Render the current input string
+        self.tui.display_single(stdscr, TEXT_INPUT_POS, f"Input: {self.input_string}")
+
+
+##############################
+############# TUI ############
+##############################
+
+class TUI:
     def __init__(self, arm_publisher_: ArmPublisher):
-        # The transition table of the Finite State Machine
-        self._transitions = [
-            # Enter and Esc Keys
-            {"src": PanelState.NORMAL, "dst": PanelState.NORMAL,
-                "key": KEY_MAP[KEY_ENTER], "sel": PanelSelect.RESET, "exec": self.reset_angle},
-            {"src": PanelState.NORMAL, "dst": PanelState.SELECT_JOINT,
-                "key": KEY_MAP[KEY_ENTER], "sel": PanelSelect.LEFT | PanelSelect.RIGHT, "exec": self._change_select_arm},
-            {"src": PanelState.NORMAL, "dst": PanelState.SELECT_PARAM,
-                "key": KEY_MAP[KEY_ENTER], "sel": PanelSelect.PARAM, "exec": None},
-            {"src": PanelState.NORMAL, "dst": PanelState.EXIT,
-                "key": KEY_MAP[KEY_ESC], "sel": PanelSelect.ALL, "exec": self._quit_},
-            {"src": PanelState.SELECT_JOINT, "dst": PanelState.NORMAL,
-                "key": KEY_MAP[KEY_ESC], "sel": PanelSelect.LEFT | PanelSelect.RIGHT, "exec": None},
-            {"src": PanelState.SELECT_JOINT, "dst": PanelState.CONTROL_JOINT,
-                "key": KEY_MAP[KEY_ENTER], "sel": PanelSelect.LEFT | PanelSelect.RIGHT, "exec": None},
-            {"src": PanelState.CONTROL_JOINT, "dst": PanelState.SELECT_JOINT,
-                "key": KEY_MAP[KEY_ESC], "sel": PanelSelect.LEFT | PanelSelect.RIGHT, "exec": None},
-            {"src": PanelState.SELECT_PARAM, "dst": PanelState.NORMAL,
-                "key": KEY_MAP[KEY_ESC], "sel": PanelSelect.PARAM, "exec": None},
-            {"src": PanelState.SELECT_PARAM, "dst": PanelState.CONTROL_PARAM,
-                "key": KEY_MAP[KEY_ENTER], "sel": PanelSelect.PARAM, "exec": None},
-            {"src": PanelState.CONTROL_PARAM, "dst": PanelState.SELECT_PARAM,
-                "key": KEY_MAP[KEY_ESC], "sel": PanelSelect.PARAM, "exec": None},
-            # Up and Down Arrow Keys
-            {"src": PanelState.NORMAL, "dst": PanelState.NORMAL,
-                "key": KEY_MAP[curses.KEY_UP] | KEY_MAP[curses.KEY_DOWN], "sel": PanelSelect.ALL, "exec": self._change_select},
-            {"src": PanelState.SELECT_JOINT, "dst": PanelState.SELECT_JOINT,
-                "key": KEY_MAP[curses.KEY_UP] | KEY_MAP[curses.KEY_DOWN], "sel": PanelSelect.ALL, "exec": self._change_select_joint},
-            {"src": PanelState.CONTROL_JOINT, "dst": PanelState.CONTROL_JOINT,
-                "key": KEY_MAP[curses.KEY_UP] | KEY_MAP[curses.KEY_DOWN], "sel": PanelSelect.ALL, "exec": self._control_select_joint},
-            {"src": PanelState.SELECT_PARAM, "dst": PanelState.SELECT_PARAM,
-                "key": KEY_MAP[curses.KEY_UP] | KEY_MAP[curses.KEY_DOWN], "sel": PanelSelect.ALL, "exec": self._change_select_param},
-            {"src": PanelState.CONTROL_PARAM, "dst": PanelState.CONTROL_PARAM,
-                "key": KEY_MAP[curses.KEY_UP] | KEY_MAP[curses.KEY_DOWN], "sel": PanelSelect.ALL, "exec": self._control_param},
-        ]
-        self._key_not_define: bool = False
-        self._trans_not_define: bool = False
-        self._msg_cnt: int = 0
+        self.state: State = NormalState(self)
         self.key: int = 0
-        self._cur_state: PanelState = PanelState.NORMAL
-        self._cur_sel: PanelSelect = PanelSelect.LEFT
-        self._cur_sel_param: ParamSelect = ParamSelect.STEP
-        self._cur_sel_joint: int = 0
-        self.cur_joint_left = copy.deepcopy(DEFAULT_LEFT_JOINT_DEG_ANGLE)
-        self.cur_joint_right = copy.deepcopy(DEFAULT_RIGHT_JOINT_DEG_ANGLE)
 
-        # Parameters
-        # self._move_step: int = DEFAULT_JOINT_MOVE_STEP_DEG
-        # self._speed: float = DEFAULT_SPEED_DEG_PER_SEC
-        # self._duration: float = DEFAULT_DURATION_SEC
-        # self._fps: float = DEFAULT_FPS
-        self._param: list = [
-            DEFAULT_JOINT_MOVE_STEP_DEG,
-            DEFAULT_SPEED_DEG_PER_SEC,
-            DEFAULT_DURATION_SEC,
-            DEFAULT_FPS
-        ]
+        # Arm settings
+        self.cur_sel: PanelSelect = PanelSelect.LEFT
+        self.cur_sel_param: ParamSelect = ParamSelect.STEP
+        self.cur_sel_joint: int = 0
+        self.cur_joint_left: list = copy.deepcopy(DEFAULT_LEFT_JOINT_DEG_ANGLE)
+        self.cur_joint_right: list = copy.deepcopy(
+            DEFAULT_RIGHT_JOINT_DEG_ANGLE)
+        self.cur_sel_arm: list = self.cur_joint_left
+        self.cur_sel_arm_min: list = MIN_LEFT_JOINT_DEG_ANGLE
+        self.cur_sel_arm_max: list = MAX_LEFT_JOINT_DEG_ANGLE
 
-        # Start with the left joint array
-        self._cur_sel_arm = self.cur_joint_left
-        self._cur_sel_arm_min = MIN_LEFT_JOINT_DEG_ANGLE
-        self._cur_sel_arm_max = MAX_LEFT_JOINT_DEG_ANGLE
+        # Parameter settings
+        self.step: float = DEFAULT_JOINT_MOVE_STEP_DEG
+        self.param_mode: ParamMode = ParamMode.SPEED
+        self.param: float = DEFAULT_SPEED_DEG_PER_SEC
+        self.fps: float = DEFAULT_FPS
 
         # Publisher for arm control
-        self._arm_publisher = arm_publisher_
-        self._arm_publisher.pub_arm(
+        self.arm_publisher: ArmPublisher = arm_publisher_
+        self.msg_cnt: int = 0
+
+        # Publish the initial joint angles
+        self.arm_publisher.pub_arm(
             self.cur_joint_left,
             self.cur_joint_right,
-            thread_id=self._msg_cnt,
+            thread_id=self.msg_cnt,
             show_info=False)
-        self._msg_cnt += 1
+        self.msg_cnt += 1
 
-    def _display_single(self, stdscr, message: str, y_position: int, is_highlight: bool = False):
-        style = curses.A_REVERSE if is_highlight else 0
+    def display_single(self, stdscr, y_position: int, message: str, is_highlight: bool = False):
+        style: int = curses.A_REVERSE if is_highlight else 0
         stdscr.addstr(y_position, 0, message, style)
 
-    def _display_menu(self, stdscr, y_position: int = 2):
-        self._display_single(
-            stdscr, f"LEFT arm: {self.cur_joint_left}", y_position + 0, self._cur_sel == PanelSelect.LEFT)
-        self._display_single(
-            stdscr, f"RIGHT arm: {self.cur_joint_right}", y_position + 1, self._cur_sel == PanelSelect.RIGHT)
-        self._display_single(
-            stdscr, f"Step (deg): {self._param[0]}, speed (deg/s): {self._param[1]}, duration (sec): {self._param[2]}, fps: {self._param[3]}", y_position + 2, self._cur_sel == PanelSelect.PARAM)
-        self._display_single(
-            stdscr, "Reset all angles", y_position + 3, self._cur_sel == PanelSelect.RESET)
+    def display_menu(self, stdscr, y_position: int = MENU_POS):
+        self.display_single(
+            stdscr, y_position, f"LEFT arm: {self.cur_joint_left}", self.cur_sel == PanelSelect.LEFT)
+        self.display_single(
+            stdscr, y_position + 1, f"RIGHT arm: {self.cur_joint_right}", self.cur_sel == PanelSelect.RIGHT)
+        self.display_single(
+            stdscr, y_position + 2, f"Step (deg): {self.step}, {self.param_mode.name}: {self.param}, fps: {self.fps}", self.cur_sel == PanelSelect.PARAM)
+        self.display_single(
+            stdscr, y_position + 3, "Reset all angles", self.cur_sel == PanelSelect.RESET_ANGLE)
+        self.display_single(
+            stdscr, y_position + 4, "Reset all parameters", self.cur_sel == PanelSelect.RESET_PARAM)
 
-    def _display_control_joint(self, stdscr, y_position: int = 7):
+    def display_sel_joint(self, stdscr, y_position: int = CONTROL_POS):
         # Highlight the active element in the current array
-        for i, val in enumerate(self._cur_sel_arm):
-            if self._cur_state == PanelState.CONTROL_JOINT and i == self._cur_sel_joint:
-                message = f"-->> Joint {i + 1}: {val} <<--"
+        for i, val in enumerate(self.cur_sel_arm):
+            self.display_single(
+                stdscr, y_position + i, f"Joint {i + 1}: {val}", i == self.cur_sel_joint)
+
+    def display_control_joint(self, stdscr, y_position: int = CONTROL_POS):
+        # Highlight the active element in the current array
+        for i, val in enumerate(self.cur_sel_arm):
+            if i == self.cur_sel_joint:
+                self.display_single(
+                    stdscr, y_position + i, f"--> Joint {i + 1}: {val} <--", True)
             else:
-                message = f"Joint {i + 1}: {val}"
-            self._display_single(
-                stdscr, message, y_position + i, i == self._cur_sel_joint)
+                self.display_single(
+                    stdscr, y_position + i, f"Joint {i + 1}: {val}", False)
 
-    def _display_control_param(self, stdscr, y_position: int = 7):
-        for i in range(get_len_bitwise_enum(ParamSelect)):
-            bitwise_id = 1 << i
-            param_sel_it = ParamSelect(bitwise_id)
-            if self._cur_state == PanelState.CONTROL_PARAM and self._cur_sel_param == bitwise_id:
-                step_msg = f"-->> {param_sel_it.name}: {self._param[i]} <<--"
-            else:
-                step_msg = f"{param_sel_it.name}: {self._param[i]}"
-            self._display_single(
-                stdscr, step_msg, y_position + i, self._cur_sel_param == bitwise_id)
+    def display_sel_param(self, stdscr, y_position: int = CONTROL_POS):
+        self.display_single(
+            stdscr, y_position, f"Step: {self.step}", self.cur_sel_param == ParamSelect.STEP)
+        self.display_single(
+            stdscr, y_position + 1, f"Mode: {self.param_mode.name}", self.cur_sel_param == ParamSelect.MODE)
+        self.display_single(
+            stdscr, y_position + 2, f"{self.param_mode.name}: {self.param}", self.cur_sel_param == ParamSelect.PARAM)
+        self.display_single(
+            stdscr, y_position + 3, f"FPS: {self.fps}", self.cur_sel_param == ParamSelect.FPS)
 
-    def _quit_(self, key: int = None):
-        """Just a trigger function for state transition.
-        """
-        quit(0)
-
-    def _change_select(self, key: int):
-        if key == curses.KEY_UP:
-            self._cur_sel = prev_bitwise_enum(self._cur_sel, PanelSelect)
-        elif key == curses.KEY_DOWN:
-            self._cur_sel = next_bitwise_enum(self._cur_sel, PanelSelect)
+    def display_control_param(self, stdscr, y_position: int = CONTROL_POS):
+        if self.cur_sel_param == ParamSelect.STEP:
+            self.display_single(stdscr, y_position, f"--> Step: {self.step} <--", True)
         else:
-            raise KeyError(
-                f"Error: The key {key} is not allowed in {self._change_select.__name__}")
-
-    def _change_select_param(self, key: int):
-        if key == curses.KEY_UP:
-            self._cur_sel_param = prev_bitwise_enum(
-                self._cur_sel_param, ParamSelect)
-        elif key == curses.KEY_DOWN:
-            self._cur_sel_param = next_bitwise_enum(
-                self._cur_sel_param, ParamSelect)
+            self.display_single(stdscr, y_position, f"Step: {self.step}", False)
+        if self.cur_sel_param == ParamSelect.MODE:
+            self.display_single(stdscr, y_position + 1, f"--> Mode: {self.param_mode.name} <--", True)
         else:
-            raise KeyError(
-                f"Error: The key {key} is not allowed in {self._change_select.__name__}")
-
-    def _change_select_arm(self, key: int = None):
-        if self._cur_sel == PanelSelect.LEFT:
-            self._cur_sel_arm = self.cur_joint_left
-            self._cur_sel_arm_min = MIN_LEFT_JOINT_DEG_ANGLE
-            self._cur_sel_arm_max = MAX_LEFT_JOINT_DEG_ANGLE
-        elif self._cur_sel == PanelSelect.RIGHT:
-            self._cur_sel_arm = self.cur_joint_right
-            self._cur_sel_arm_min = MIN_RIGHT_JOINT_DEG_ANGLE
-            self._cur_sel_arm_max = MAX_RIGHT_JOINT_DEG_ANGLE
+            self.display_single(stdscr, y_position + 1, f"Mode: {self.param_mode.name}", False)
+        if self.cur_sel_param == ParamSelect.PARAM:
+            self.display_single(stdscr, y_position + 2, f"--> {self.param_mode.name}: {self.param} <--", True)
         else:
-            raise KeyError(
-                f"Error: The select mode {self._cur_sel.name} is not allowed in {self._change_select_arm.__name__}")
-
-    def _change_select_joint(self, key: int):
-        if key == curses.KEY_UP:
-            self._cur_sel_joint = (
-                self._cur_sel_joint - 1) % DEFAULT_JOINT_NUMBER
-        elif key == curses.KEY_DOWN:
-            self._cur_sel_joint = (
-                self._cur_sel_joint + 1) % DEFAULT_JOINT_NUMBER
+            self.display_single(stdscr, y_position + 2, f"{self.param_mode.name}: {self.param}", False)
+        if self.cur_sel_param == ParamSelect.FPS:
+            self.display_single(stdscr, y_position + 3, f"--> FPS: {self.fps} <--", True)
         else:
-            raise KeyError(
-                f"Error: The key {key} is not allowed in {self._change_select_joint.__name__}")
+            self.display_single(stdscr, y_position + 3, f"FPS: {self.fps}", False)
 
-    def _control_select_joint(self, key: int):
-        if key == curses.KEY_UP:
-            self._cur_sel_arm[self._cur_sel_joint] = min(
-                self._cur_sel_arm[self._cur_sel_joint] + self._param[0],
-                self._cur_sel_arm_max[self._cur_sel_joint]
-            )
-            self._arm_publisher.pub_arm(
-                self.cur_joint_left,
-                self.cur_joint_right,
-                thread_id=self._msg_cnt,
-                show_info=False)
-            self._msg_cnt += 1
-        elif key == curses.KEY_DOWN:
-            self._cur_sel_arm[self._cur_sel_joint] = max(
-                self._cur_sel_arm[self._cur_sel_joint] - self._param[0],
-                self._cur_sel_arm_min[self._cur_sel_joint]
-            )
-            self._arm_publisher.pub_arm(
-                self.cur_joint_left,
-                self.cur_joint_right,
-                thread_id=self._msg_cnt,
-                show_info=False)
-            self._msg_cnt += 1
-        else:
-            raise KeyError(
-                f"Error: The key {key} is not allowed in {self._control_select_joint.__name__}")
+    def select_prev_item(self):
+        self.cur_sel = prev_bitwise_enum(self.cur_sel, PanelSelect)
 
-    def _control_param(self, key: int):
-        """WARNING: This function has bugs.
-        
-        This function use the constraints of the step to other parameters.
-        However, the speed, duration and FPS should be floating points.
-        If you want to fix this, you need to let user input the value directly.
-        """
-        if key == curses.KEY_UP:
-            self._param[count_trailing_zeros_bitwise(self._cur_sel_param)] = min(
-                self._param[count_trailing_zeros_bitwise(self._cur_sel_param)] + 1,
-                MAX_JOINT_MOVE_STEP_DEG
-            )
-        elif key == curses.KEY_DOWN:
-            self._param[count_trailing_zeros_bitwise(self._cur_sel_param)] = max(
-                self._param[count_trailing_zeros_bitwise(self._cur_sel_param)] - 1,
-                MIN_JOINT_MOVE_STEP_DEG
-            )
-        else:
-            raise KeyError(
-                f"Error: The key {key} is not allowed in {self._control_param.__name__}")
+    def select_next_item(self):
+        self.cur_sel = next_bitwise_enum(self.cur_sel, PanelSelect)
 
-    def reset_angle(self, key: int = None):
-        self.cur_joint_left = copy.deepcopy(DEFAULT_LEFT_JOINT_DEG_ANGLE)
-        self.cur_joint_right = copy.deepcopy(DEFAULT_RIGHT_JOINT_DEG_ANGLE)
-        self._arm_publisher.pub_arm(
-            self.cur_joint_left,
-            self.cur_joint_right,
-            thread_id=self._msg_cnt,
-            show_info=False)
-        self._msg_cnt += 1
-        self._cur_sel = PanelSelect.LEFT
+    def change_state(self, new_state_cls: State):
+        """Transition to a new state."""
+        self.state = new_state_cls(self)
 
-    def control_loop(self, stdscr):
-        while True:
+    def set_to_left(self):
+        self.cur_sel_arm = self.cur_joint_left
+        self.cur_sel_arm_min = MIN_LEFT_JOINT_DEG_ANGLE
+        self.cur_sel_arm_max = MAX_LEFT_JOINT_DEG_ANGLE
+
+    def set_to_right(self):
+        self.cur_sel_arm = self.cur_joint_right
+        self.cur_sel_arm_min = MIN_RIGHT_JOINT_DEG_ANGLE
+        self.cur_sel_arm_max = MAX_RIGHT_JOINT_DEG_ANGLE
+
+    def select_prev_joint(self):
+        self.cur_sel_joint = (
+            self.cur_sel_joint - 1) % DEFAULT_JOINT_NUMBER
+
+    def select_next_joint(self):
+        self.cur_sel_joint = (
+            self.cur_sel_joint + 1) % DEFAULT_JOINT_NUMBER
+    
+    def increase_joint(self):
+        self.cur_sel_arm[self.cur_sel_joint] = min(
+            self.cur_sel_arm[self.cur_sel_joint] + self.step,
+            self.cur_sel_arm_max[self.cur_sel_joint]
+        )
+    
+    def decrease_joint(self):
+        self.cur_sel_arm[self.cur_sel_joint] = max(
+            self.cur_sel_arm[self.cur_sel_joint] - self.step,
+            self.cur_sel_arm_min[self.cur_sel_joint]
+        )
+    
+    def select_prev_param(self):
+        self.cur_sel_param = prev_bitwise_enum(self.cur_sel_param, ParamSelect)
+    
+    def select_next_param(self):
+        self.cur_sel_param = next_bitwise_enum(self.cur_sel_param, ParamSelect)
+
+    def select_prev_mode(self):
+        self.param_mode = prev_bitwise_enum(self.param_mode, ParamMode)
+    
+    def select_next_mode(self):
+        self.param_mode = next_bitwise_enum(self.param_mode, ParamMode)
+
+    def reset_angle(self):
+        """Reset to the initial state and item."""
+        self.cur_sel: PanelSelect = PanelSelect.LEFT
+        self.set_to_left()
+        self.cur_sel_param: ParamSelect = ParamSelect.STEP
+        self.cur_sel_joint: int = 0
+        self.cur_joint_left: list = copy.deepcopy(DEFAULT_LEFT_JOINT_DEG_ANGLE)
+        self.cur_joint_right: list = copy.deepcopy(
+            DEFAULT_RIGHT_JOINT_DEG_ANGLE)
+
+    def reset_param(self):
+        """Reset to the initial parameter value and mode."""
+        self.cur_sel: PanelSelect = PanelSelect.LEFT
+        self.set_to_left()
+        self.step: float = DEFAULT_JOINT_MOVE_STEP_DEG
+        self.param_mode: ParamMode = ParamMode.SPEED
+        self.param: float = DEFAULT_SPEED_DEG_PER_SEC
+        self.fps: float = DEFAULT_FPS
+
+    def run(self, stdscr):
+        curses.curs_set(0)
+        stdscr.clear()
+        while not isinstance(self.state, ExitState):
             stdscr.clear()
-
-            # Current state
-            self._display_single(
-                stdscr, f"Panel State: {self._cur_state.name}", 0)
-
-            # Error message
-            if self._key_not_define:
-                self._display_single(
-                    stdscr, f"Warning: The key {self.key} is not defined, ignoring.", 1)
-            elif self._trans_not_define:
-                self._display_single(
-                    stdscr, f"Warning: No transtition for key {self.key} in current state, ignoring.", 1)
-
-            # Menu
-            self._display_menu(stdscr)
-
-            # Control
-            if bool(self._cur_state & (PanelState.SELECT_JOINT | PanelState.CONTROL_JOINT)):
-                self._display_control_joint(stdscr)
-            elif bool(self._cur_state & (PanelState.SELECT_PARAM | PanelState.CONTROL_PARAM)):
-                self._display_control_param(stdscr)
-
-            self._key_not_define = False
-            self._trans_not_define = False
-            self.key = stdscr.getch()
-            try:
-                key_bit = KEY_MAP[self.key]
-            except KeyError:
-                self._key_not_define = True
-                continue
-            trans: dict = None
-
-            for trans_ in self._transitions:
-                # Check if match.
-                if bool(trans_["key"] & key_bit) and \
-                        bool(trans_["src"] & self._cur_state) and \
-                        bool(trans_["sel"] & self._cur_sel):
-                    trans = trans_
-                    break
-
-            # Check if there matches any transition rules.
-            if trans is None:
-                self._trans_not_define = True
-                stdscr.refresh()
-                time.sleep(0.1)
-                continue
-            else:
-                # Check if the transition rule needs to execute the desired function.
-                if trans["exec"] is not None:
-                    trans["exec"](self.key)
-
-                # Move to the target state.
-                self._cur_state = trans["dst"]
-
+            self.state.render(stdscr)
             stdscr.refresh()
+            key = stdscr.getch()
+            self.state.handle_input(key)
 
 
 def curses_main(stdscr, arm_publisher: ArmPublisher):
-    panel = ControlPanel(arm_publisher)
-    panel.control_loop(stdscr)
+    panel = TUI(arm_publisher)
+    panel.run(stdscr)
 
 
 def main(args=None):
