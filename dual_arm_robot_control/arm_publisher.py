@@ -6,7 +6,7 @@ import rclpy
 from rclpy.node import Node
 from trajectory_msgs.msg import JointTrajectoryPoint
 from rclpy.executors import MultiThreadedExecutor
-from arm_control.params import *
+from dual_arm_robot_control.params import *
 
 
 class ArmPublisher(Node):

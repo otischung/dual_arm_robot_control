@@ -1,4 +1,4 @@
-from arm_control.params import *
+from dual_arm_robot_control.params import *
 from enum import Enum, IntEnum
 from typing import Type
 import curses

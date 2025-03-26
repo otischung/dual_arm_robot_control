@@ -1,19 +1,18 @@
 #!/bin/bash
 
-device_options=""
-
-if [ -e /dev/ttyUSB0 ]; then
-    device_options+=" --device=/dev/ttyUSB0"
-fi
-
-if [ -e /dev/ttyACM0 ]; then
-    device_options+=" --device=/dev/ttyACM0"
-fi
-
+xhost +local:docker
 docker run -it --rm \
-    -v ./src/arm_control:/workspaces/src/arm_control \
+    --name moveit2_container \
+    -v ./../../src:/workspaces/src \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    -v $HOME/.Xauthority:/root/.Xauthority \
+    -v /dev/shm:/dev/shm \
+    -e QT_X11_NO_MITSHM=1 \
+    -e DISPLAY=$DISPLAY \
     --network host \
-    $device_options \
+    --ipc host \
+    --pid host \
+    --privileged \
     --env-file ./.env \
-    registry.screamtrumpet.csie.ncku.edu.tw/pros_images/pros_base_image:latest \
+    registry.screamtrumpet.csie.ncku.edu.tw/pros_images/pros_moveit_image:latest \
     /bin/bash

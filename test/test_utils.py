@@ -1,7 +1,7 @@
 import pytest
 import curses
 
-from arm_control.utils import (
+from dual_arm_robot_control.utils import (
     count_trailing_zeros_bitwise,
     get_len_bitwise_enum,
     get_max_bitwise_enum,
@@ -14,7 +14,7 @@ from arm_control.utils import (
     ParamMode,
     ParamSelect
 )
-from arm_control.params import *
+from dual_arm_robot_control.params import *
 
 
 def test_count_trailing_zeros_bitwise():

@@ -2,9 +2,9 @@ import copy
 import curses
 import rclpy
 from abc import ABC, abstractmethod
-from arm_control.arm_publisher import *
-from arm_control.params import *
-from arm_control.utils import *
+from dual_arm_robot_control.arm_publisher import *
+from dual_arm_robot_control.params import *
+from dual_arm_robot_control.utils import *
 
 # A circular dependency exists between the TUI and the State class,
 # requiring them to be implemented together in a single file.
