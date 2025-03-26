@@ -235,8 +235,8 @@ class TUI:
 
         # Parameter settings
         self.step: float = DEFAULT_JOINT_MOVE_STEP_DEG
-        self.param_mode: ParamMode = ParamMode.SPEED
-        self.param: float = DEFAULT_SPEED_DEG_PER_SEC
+        self.param_mode: ParamMode = ParamMode.DURATION
+        self.param: float = DEFAULT_DURATION_SEC
         self.fps: float = DEFAULT_FPS
 
         # Publisher for arm control
@@ -372,14 +372,23 @@ class TUI:
         self.cur_joint_left: list = copy.deepcopy(DEFAULT_LEFT_JOINT_DEG_ANGLE)
         self.cur_joint_right: list = copy.deepcopy(
             DEFAULT_RIGHT_JOINT_DEG_ANGLE)
+        self.arm_publisher.pub_arm_with_param(
+            self.cur_joint_left,
+            self.cur_joint_right,
+            self.param,
+            self.param_mode == ParamMode.SPEED,
+            self.fps,
+            thread_id=self.msg_cnt,
+            show_info=False)
+        self.msg_cnt += 1
 
     def reset_param(self):
         """Reset to the initial parameter value and mode."""
         self.cur_sel: PanelSelect = PanelSelect.LEFT
         self.set_to_left()
         self.step: float = DEFAULT_JOINT_MOVE_STEP_DEG
-        self.param_mode: ParamMode = ParamMode.SPEED
-        self.param: float = DEFAULT_SPEED_DEG_PER_SEC
+        self.param_mode: ParamMode = ParamMode.DURATION
+        self.param: float = DEFAULT_DURATION_SEC
         self.fps: float = DEFAULT_FPS
 
     def run(self, stdscr):

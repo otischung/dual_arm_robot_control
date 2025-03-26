@@ -15,14 +15,24 @@ class ArmPublisher(Node):
                  init_left_joint_deg_angle: list = DEFAULT_LEFT_JOINT_DEG_ANGLE,
                  init_right_joint_deg_angle: list = DEFAULT_RIGHT_JOINT_DEG_ANGLE):
         super().__init__(node_name)
-        self._joint_trajectory_publisher_left = self.create_publisher(
+        self._joint_trajectory_publisher_left_arm = self.create_publisher(
             JointTrajectoryPoint,
-            LEFT_JOINTS_TOPIC,
+            LEFT_ARM_TOPIC,
             ROS_QOS_DEPTH
         )
-        self._joint_trajectory_publisher_right = self.create_publisher(
+        self._joint_trajectory_publisher_right_arm = self.create_publisher(
             JointTrajectoryPoint,
-            RIGHT_JOINTS_TOPIC,
+            RIGHT_ARM_TOPIC,
+            ROS_QOS_DEPTH
+        )
+        self._joint_trajectory_publisher_left_hand = self.create_publisher(
+            JointTrajectoryPoint,
+            LEFT_HAND_TOPIC,
+            ROS_QOS_DEPTH
+        )
+        self._joint_trajectory_publisher_right_hand = self.create_publisher(
+            JointTrajectoryPoint,
+            RIGHT_HAND_TOPIC,
             ROS_QOS_DEPTH
         )
         self.prev_left_joint_deg_angle = init_left_joint_deg_angle
@@ -50,24 +60,46 @@ class ArmPublisher(Node):
         if show_info:
             self.get_logger().info(f"THREAD ID: {thread_id}")
         try:
-            msg_left = JointTrajectoryPoint()
-            msg_left.positions = [math.radians(
-                pos) for pos in joint_pos_left_deg]
-            msg_left.velocities = [0.0 for _ in joint_pos_left_deg]
+            msg_left_arm = JointTrajectoryPoint()
+            msg_left_arm.positions = [math.radians(
+                pos) for pos in joint_pos_left_deg[:HAND_BIAS]]
+            msg_left_arm.velocities = [
+                0.0 for _ in joint_pos_left_deg[:HAND_BIAS]]
 
-            msg_right = JointTrajectoryPoint()
-            msg_right.positions = [math.radians(
-                pos) for pos in joint_pos_right_deg]
-            msg_right.velocities = [0.0 for _ in joint_pos_right_deg]
+            msg_right_arm = JointTrajectoryPoint()
+            msg_right_arm.positions = [math.radians(
+                pos) for pos in joint_pos_right_deg[:HAND_BIAS]]
+            msg_right_arm.velocities = [
+                0.0 for _ in joint_pos_right_deg[:HAND_BIAS]]
+
+            msg_left_hand = JointTrajectoryPoint()
+            msg_left_hand.positions = [math.radians(
+                pos) for pos in joint_pos_left_deg[HAND_BIAS:]]
+            msg_left_hand.velocities = [
+                0.0 for _ in joint_pos_left_deg[HAND_BIAS:]]
+
+            msg_right_hand = JointTrajectoryPoint()
+            msg_right_hand.positions = [math.radians(
+                pos) for pos in joint_pos_right_deg[HAND_BIAS:]]
+            msg_right_hand.velocities = [
+                0.0 for _ in joint_pos_right_deg[HAND_BIAS:]]
 
             if show_info:
                 self.get_logger().info(
-                    f"Published LEFT joint data.\n{joint_pos_left_deg}")
-            self._joint_trajectory_publisher_left.publish(msg_left)
+                    f"Published LEFT arm data.\n{joint_pos_left_deg[:HAND_BIAS]}")
+            self._joint_trajectory_publisher_left_arm.publish(msg_left_arm)
             if show_info:
                 self.get_logger().info(
-                    f"Published RIGHT joint data.\n{joint_pos_right_deg}")
-            self._joint_trajectory_publisher_right.publish(msg_right)
+                    f"Published RIGHT arm data.\n{joint_pos_right_deg[:HAND_BIAS]}")
+            self._joint_trajectory_publisher_right_arm.publish(msg_right_arm)
+            if show_info:
+                self.get_logger().info(
+                    f"Published LEFT hand data.\n{joint_pos_left_deg[HAND_BIAS:]}")
+            self._joint_trajectory_publisher_left_hand.publish(msg_left_hand)
+            if show_info:
+                self.get_logger().info(
+                    f"Published RIGHT hand data.\n{joint_pos_right_deg[HAND_BIAS:]}")
+            self._joint_trajectory_publisher_right_hand.publish(msg_right_hand)
 
         except Exception as e:
             self.get_logger().error(
