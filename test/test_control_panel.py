@@ -1,11 +1,9 @@
 import pytest
 from unittest.mock import MagicMock
-from arm_control.control_panel import TUI, NormalState, SelectJointState, ControlJointState, SelectParamState, ControlParamState, ControlParamModeState, ExitState
-from arm_control.arm_publisher import ArmPublisher
-from arm_control.params import *
-from arm_control.utils import *
-
-# src/arm_control/arm_control/test_control_panel.py
+from dual_arm_robot_control.control_panel import TUI, NormalState, SelectJointState, ControlJointState, SelectParamState, ControlParamState, ControlParamModeState, ExitState
+from dual_arm_robot_control.arm_publisher import ArmPublisher
+from dual_arm_robot_control.params import *
+from dual_arm_robot_control.utils import *
 
 
 @pytest.fixture

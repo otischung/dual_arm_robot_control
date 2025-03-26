@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'arm_control'
+package_name = 'dual_arm_robot_control'
 
 setup(
     name=package_name,
@@ -20,10 +20,10 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'arm_reader = arm_control.arm_reader:main',
-            'arm_writer = arm_control.arm_writer:main',
-            'arm_publisher = arm_control.arm_publisher:main',
-            'control_panel = arm_control.control_panel:main'
+            'arm_reader = dual_arm_robot_control.arm_reader:main',
+            'arm_writer = dual_arm_robot_control.arm_writer:main',
+            'arm_publisher = dual_arm_robot_control.arm_publisher:main',
+            'control_panel = dual_arm_robot_control.control_panel:main'
         ],
     },
 )
